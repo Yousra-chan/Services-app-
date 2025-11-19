@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import 'constants.dart';
+import 'package:myapp/ViewModel/chat_view_model.dart';
+import 'constants.dart'; // Assurez-vous que les constantes (kPrimaryBlue, etc.) sont bien définies
 import 'package:myapp/screens/chat/disscussion/disscussion_page.dart';
+import 'package:myapp/models/chatmodel.dart';
+import 'package:intl/intl.dart';
 
 // --- Reusable Widget Builders ---
 
-// Helper method for the horizontal Avatar/Search bar (used in the header)
 Widget buildAvatar(int index) {
   bool isSearchIcon = index == 0;
   return Container(
@@ -37,14 +39,30 @@ Widget buildAvatar(int index) {
   );
 }
 
-// Helper method for the individual chat tile (used in the ListView)
-Widget buildChatTile(BuildContext context, int index, String chatName) {
-  final bool isUnread = index % 3 == 0;
+Widget buildChatTile(
+  BuildContext context,
+  ChatModel chat,
+  String currentUserId, {
+  int unreadCount = 0,
+}) {
+  final bool isUnread = unreadCount > 0;
+
+  // Déterminer l'autre utilisateur
+  final otherUserId =
+      chat.clientId == currentUserId ? chat.providerId : chat.clientId;
+  final String chatName = "Contact ${otherUserId.substring(0, 5)}...";
+
+  // Dernier message
+  final String lastMessageText =
+      chat.lastMessage.isEmpty ? "Démarrer la discussion..." : chat.lastMessage;
+
+  // Statut en ligne simulé
+  final bool isOnline = otherUserId.hashCode % 2 == 0;
 
   return Container(
     margin: const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
     decoration: BoxDecoration(
-      color: Colors.white, // Tile background is white
+      color: Colors.white,
       borderRadius: BorderRadius.circular(15),
       boxShadow: [
         BoxShadow(
@@ -63,12 +81,12 @@ Widget buildChatTile(BuildContext context, int index, String chatName) {
             radius: 28,
             backgroundColor: kLightGreyBlue,
             child: Icon(
-              CupertinoIcons.person_fill,
+              CupertinoIcons.person_fill, // Icône de personne
               color: kPrimaryBlue,
               size: 30,
             ),
           ),
-          if (index % 2 == 0)
+          if (isOnline)
             Positioned(
               right: 0,
               bottom: 0,
@@ -96,9 +114,7 @@ Widget buildChatTile(BuildContext context, int index, String chatName) {
       subtitle: Padding(
         padding: const EdgeInsets.only(top: 4.0),
         child: Text(
-          isUnread
-              ? "New message: You won't believe..."
-              : "Hey, I'll send the files by end of day.",
+          lastMessageText,
           style: TextStyle(
             fontSize: 13,
             color: isUnread ? kPrimaryBlue.withOpacity(0.8) : Colors.grey[600],
@@ -114,7 +130,7 @@ Widget buildChatTile(BuildContext context, int index, String chatName) {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Text(
-            "Yesterday",
+            _formatTimestamp(chat.lastMessageTime.toDate()),
             style: TextStyle(
               fontSize: 11,
               color: isUnread ? kPrimaryBlue : Colors.grey[500],
@@ -132,7 +148,7 @@ Widget buildChatTile(BuildContext context, int index, String chatName) {
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text(
-                "${index + 1}",
+                unreadCount > 99 ? "99+" : "$unreadCount",
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   color: Colors.white,
@@ -148,19 +164,44 @@ Widget buildChatTile(BuildContext context, int index, String chatName) {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder:
-                (context) =>
-                    DiscussionPage(contactName: "Molly Clark", isOnline: true),
+            builder: (context) => DiscussionPage(
+              contactName: chatName,
+              isOnline: isOnline,
+              chatId: chat.chatId,
+              currentUserId: currentUserId,
+              chatViewModel: ChatViewModel(userId: currentUserId),
+            ),
           ),
         );
       },
+      // Le onLongPress qui appelait les options de suppression/blocage est maintenant retiré.
     ),
   );
 }
 
-// --- Animation Widget ---
+// --- Fonctions utilitaires conservées ---
 
-// Widget that provides a slide-up and fade-in animation for list items.
+String _formatTimestamp(DateTime timestamp) {
+  final now = DateTime.now();
+  final difference = now.difference(timestamp);
+
+  if (difference.inDays == 0) {
+    final hours = timestamp.hour.toString().padLeft(2, '0');
+    final minutes = timestamp.minute.toString().padLeft(2, '0');
+    return "$hours:$minutes";
+  } else if (difference.inDays == 1) {
+    return "Yesterday";
+  } else if (difference.inDays < 7) {
+    return "${difference.inDays}d ago";
+  } else {
+    return DateFormat('dd/MM/yy').format(timestamp);
+  }
+}
+
+// --- Fonctions de suppression/blocage/signalement SUPPRIMÉES ---
+// Les fonctions _showChatOptions et _confirmDeleteChat ont été retirées.
+
+// --- Animation Widget (reste le même) ---
 class AnimatedChatListItem extends StatefulWidget {
   final Widget child;
   final int index;
@@ -172,7 +213,6 @@ class AnimatedChatListItem extends StatefulWidget {
   });
 
   @override
-  // Note the state class name is now public: _AnimatedChatListItemState
   State<AnimatedChatListItem> createState() => _AnimatedChatListItemState();
 }
 
@@ -202,7 +242,6 @@ class _AnimatedChatListItemState extends State<AnimatedChatListItem>
       end: 1.0,
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeIn));
 
-    // Staggered animation effect using Future.delayed
     Future.delayed(delay, () {
       if (mounted) {
         _controller.forward();

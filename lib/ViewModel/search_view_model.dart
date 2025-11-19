@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/search_service.dart';
-import '../models/providermodel.dart';
-import '../models/servicesmodel.dart';
+import '../models/ProviderModel.dart';
+import '../models/ServicesModel.dart';
 
 class SearchViewModel extends ChangeNotifier {
   final SearchService _searchService = SearchService();
@@ -36,10 +36,9 @@ class SearchViewModel extends ChangeNotifier {
       final results = await Future.wait([
         // FIX: Use the corrected method name
         _searchService.searchProvidersByProfessionOrName(query),
-        _searchService.searchServicesByName(query),
       ]);
 
-      providerResults = results[0] as List<ProviderModel>;
+      providerResults = results[0];
       serviceResults = results[1] as List<ServiceModel>;
     } catch (e) {
       errorMessage = 'Failed to execute search: $e';
@@ -50,8 +49,6 @@ class SearchViewModel extends ChangeNotifier {
       notifyListeners();
     }
   }
-
-  // --- Optional dedicated search methods (if needed separately) ---
 
   /// Searches only for providers based on profession or name.
   Future<void> searchProvidersOnly(String query) async {
@@ -66,10 +63,10 @@ class SearchViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // FIX: Use the corrected method name
-      providerResults = await _searchService.searchProvidersByProfessionOrName(
+      providerResults = (await _searchService.searchProvidersByProfessionOrName(
         query,
-      );
+      ))
+          .cast<ProviderModel>();
       serviceResults =
           []; // Clear service results when using a dedicated search
     } catch (e) {

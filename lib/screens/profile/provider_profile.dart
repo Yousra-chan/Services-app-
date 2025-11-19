@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 // Assuming the path is correct
-import 'package:myapp/Models/ProviderModel.dart';
+import 'package:myapp/models/ProviderModel.dart';
 // Assuming this file defines colors like kPrimaryBlue, kLightBackgroundColor, etc.
 import 'package:myapp/screens/posts/posts_constants.dart';
 

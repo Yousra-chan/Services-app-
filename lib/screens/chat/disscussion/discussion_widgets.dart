@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:myapp/models/MessageModel.dart';
 import 'package:myapp/screens/chat/disscussion/disscussion_constants.dart';
-// --- Widget Builders ---
+import 'package:intl/intl.dart';
 
-// Custom AppBar for the Discussion Page
 Widget buildDiscussionAppBar(
   BuildContext context,
   String contactName,
@@ -26,19 +26,14 @@ Widget buildDiscussionAppBar(
     child: Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        // Back Button
         GestureDetector(
-          onTap: () {
-            Navigator.pop(context);
-          },
+          onTap: () => Navigator.pop(context),
           child: const Icon(
             CupertinoIcons.back,
             color: kLightTextColor,
             size: 28,
           ),
         ),
-
-        // Contact Info (Avatar, Name, Status)
         Expanded(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10.0),
@@ -85,16 +80,16 @@ Widget buildDiscussionAppBar(
   );
 }
 
-// Builds a single message bubble (sent or received)
-Widget buildMessageBubble(Message message) {
-  final bool isSent = message.type == MessageType.sent;
+// Builds a single message bubble using MessageModel
+Widget buildMessageBubble(MessageModel message, String currentUserId) {
+  final bool isSent = message.senderId == currentUserId;
 
   return Align(
     alignment: isSent ? Alignment.centerRight : Alignment.centerLeft,
     child: Container(
       margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 15),
-      constraints: const BoxConstraints(maxWidth: 300), // Max width constraint
+      constraints: const BoxConstraints(maxWidth: 300),
       decoration: BoxDecoration(
         color: isSent ? kOutgoingBubbleColor : kIncomingBubbleColor,
         borderRadius: BorderRadius.only(
@@ -120,7 +115,7 @@ Widget buildMessageBubble(Message message) {
           ),
           const SizedBox(height: 4),
           Text(
-            message.time.split(' ').last, // Just the time part
+            DateFormat('HH:mm').format(message.timestamp.toDate()),
             style: TextStyle(
               color:
                   isSent ? kLightTextColor.withOpacity(0.7) : kMutedTextColor,
@@ -134,7 +129,7 @@ Widget buildMessageBubble(Message message) {
   );
 }
 
-// Builds the date separator (e.g., "Yesterday", "Today")
+// Builds the date separator
 Widget buildDateSeparator(String date) {
   return Container(
     margin: const EdgeInsets.symmetric(vertical: 15),

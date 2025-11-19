@@ -4,7 +4,8 @@ class MessageModel {
   String? id;
   final String senderId;
   final String text;
-  final Timestamp timestamp;
+  final dynamic
+      timestamp; // Changed to dynamic to handle both DateTime and Timestamp
   final String type;
   final bool isRead;
 
@@ -21,21 +22,26 @@ class MessageModel {
     return {
       'senderId': senderId,
       'text': text,
-      'timestamp': timestamp,
+      'timestamp':
+          timestamp is DateTime ? Timestamp.fromDate(timestamp) : timestamp,
       'type': type,
       'isRead': isRead,
     };
   }
 
-  factory MessageModel.fromDoc(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+  factory MessageModel.fromMap(Map<String, dynamic> data) {
     return MessageModel(
-      id: doc.id,
+      id: data['id'],
       senderId: data['senderId'] ?? '',
       text: data['text'] ?? '',
-      timestamp: data['timestamp'] as Timestamp,
+      timestamp: data['timestamp'] ?? Timestamp.now(),
       type: data['type'] ?? 'text',
       isRead: data['isRead'] ?? false,
     );
+  }
+
+  factory MessageModel.fromDoc(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    return MessageModel.fromMap({...data, 'id': doc.id});
   }
 }

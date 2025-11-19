@@ -1,78 +1,112 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/chat_service.dart';
-import '../models/chatmodel.dart';
-import '../models/messagemodel.dart';
+import '../models/ChatModel.dart';
+import '../models/MessageModel.dart';
 
 class ChatViewModel extends ChangeNotifier {
   final ChatService _chatService = ChatService();
 
-  // Streams
-  Stream<List<ChatModel>>? _userChatsStream;
-  Stream<List<ChatModel>>? get userChatsStream => _userChatsStream;
+  late Stream<List<ChatModel>> _userChatsStream;
+  Stream<List<ChatModel>> get userChatsStream => _userChatsStream;
 
-  // Local state for loading and error
   bool _isLoading = false;
   bool get isLoading => _isLoading;
 
   String? _error;
   String? get error => _error;
 
+  String? _currentUserId;
+
   ChatViewModel({required String userId}) {
+    _currentUserId = userId;
     _initializeStream(userId);
   }
 
-  // Initialize or refresh the stream for a given user
   void _initializeStream(String userId) {
     _userChatsStream = _chatService.getUserChatsStream(userId);
     notifyListeners();
   }
 
-  // Optionally allow switching users dynamically
   void updateUser(String newUserId) {
+    _currentUserId = newUserId;
     _initializeStream(newUserId);
   }
 
-  // Listen to messages in a specific chat
+  // Écouter les messages d'un chat
   Stream<List<MessageModel>> listenMessages(String chatId) {
-    return _chatService.listenMessages(chatId);
+    if (_currentUserId == null) {
+      throw Exception('ID utilisateur non défini');
+    }
+    return _chatService.listenMessages(chatId, currentUserId: _currentUserId);
   }
 
-  // Send a message with safe error handling
-  Future<void> sendMessage(String chatId, MessageModel message) async {
+  // Envoyer un message
+  Future<bool> sendMessage(String chatId, MessageModel message) async {
     _setLoading(true);
+    _setError(null);
+
     try {
       await _chatService.sendMessage(chatId, message);
+      return true;
     } catch (e) {
-      _setError('Failed to send message: $e');
+      _setError('Erreur lors de l\'envoi: $e');
+      return false;
     } finally {
       _setLoading(false);
     }
   }
 
-  // Create a new chat between client and provider
-  Future<void> createChat({
+  // Créer un nouveau chat
+  Future<String?> createChat({
     required String clientId,
     required String providerId,
-    required DocumentReference clientRef,
-    required DocumentReference providerRef,
   }) async {
     _setLoading(true);
+    _setError(null);
+
     try {
-      await _chatService.createChat(
+      final chatId = await _chatService.createChat(
         clientId: clientId,
         providerId: providerId,
-        clientRef: clientRef,
-        providerRef: providerRef,
       );
+      return chatId;
     } catch (e) {
-      _setError('Failed to create chat: $e');
+      _setError('Erreur création chat: $e');
+      return null;
     } finally {
       _setLoading(false);
     }
   }
 
-  // Internal helpers for managing state
+  // Récupérer les prestataires
+  Future<List<Map<String, dynamic>>> getAvailableProviders() async {
+    _setLoading(true);
+    try {
+      return await _chatService.getAvailableProviders();
+    } catch (e) {
+      _setError('Erreur chargement prestataires: $e');
+      return [];
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  // Compteurs de messages non lus
+  Stream<int> getUnreadCount(String chatId) {
+    if (_currentUserId == null) {
+      throw Exception('ID utilisateur non défini');
+    }
+    return _chatService.getUnreadCount(chatId, _currentUserId!);
+  }
+
+  Stream<int> getTotalUnreadCount() {
+    if (_currentUserId == null) {
+      throw Exception('ID utilisateur non défini');
+    }
+    return _chatService.getTotalUnreadCount(_currentUserId!);
+  }
+
+  // Helpers
   void _setLoading(bool value) {
     _isLoading = value;
     notifyListeners();
@@ -80,6 +114,11 @@ class ChatViewModel extends ChangeNotifier {
 
   void _setError(String? message) {
     _error = message;
+    notifyListeners();
+  }
+
+  void clearError() {
+    _error = null;
     notifyListeners();
   }
 }

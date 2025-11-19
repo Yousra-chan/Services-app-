@@ -5,9 +5,9 @@ const Color kMutedTextColor = Color(0xFF5A6670);
 const Color kLightBackgroundColor = Colors.white;
 const Color kBorderColor = Color(0xFFE0E0E0);
 const Color kDarkTextColor = Color(0xFF222222);
-const Color kLinkColor = kPrimaryBlue; // For links and primary actions
-const String kAppFont = 'Roboto'; // Consistent font family
-const double kHorizontalPadding = 32.0; // Standard horizontal padding
+const Color kLinkColor = kPrimaryBlue;
+const String kAppFont = 'Roboto';
+const double kHorizontalPadding = 32.0;
 const Color kInputFillColor = Color(0xFFE9ECEF);
 
 /// Returns a common, clean Input Decoration style for forms.

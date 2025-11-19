@@ -33,8 +33,8 @@ class ProviderModel {
     required this.services,
   });
 
-  // Factory method to create a model from Firestore data
-  factory ProviderModel.fromMap(Map<String, dynamic> map, [String? docId]) {
+  // FIXED: Change to two required parameters to match usage
+  factory ProviderModel.fromMap(Map<String, dynamic> map, String docId) {
     // Safely parse GeoPoint
     GeoPoint? geoPoint;
     if (map['location'] is GeoPoint) {
@@ -48,8 +48,17 @@ class ProviderModel {
             ? List<String>.from(servicesList.map((x) => x.toString()))
             : [];
 
+    // Safely parse userRef - handle cases where it might not exist
+    DocumentReference userRef;
+    try {
+      userRef = map['userRef'] as DocumentReference;
+    } catch (e) {
+      // Create a dummy reference or handle appropriately
+      userRef = FirebaseFirestore.instance.collection('users').doc(docId);
+    }
+
     return ProviderModel(
-      uid: docId,
+      uid: docId, // Now using the required docId parameter
       name: map['name'] ?? '',
       profession: map['profession'] ?? '',
       description: map['description'] ?? '',
@@ -58,15 +67,15 @@ class ProviderModel {
       photoUrl: map['photoUrl'],
       location: geoPoint,
       address: map['address'] ?? '',
-      rating: (map['rating'] is num) ? map['rating'].toDouble() : 0.0,
+      rating: (map['rating'] is num) ? (map['rating'] as num).toDouble() : 0.0,
       subscriptionActive: map['subscriptionActive'] ?? false,
       subscriptionExpires: map['subscriptionExpires'] as Timestamp?,
-      userRef: map['userRef'] as DocumentReference,
+      userRef: userRef,
       services: services,
     );
   }
 
-  //convert the model to a Firestore map
+  // Convert the model to a Firestore map
   Map<String, dynamic> toMap() {
     return {
       'name': name,

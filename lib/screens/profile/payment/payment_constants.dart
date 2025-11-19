@@ -1,84 +1,104 @@
-import 'package:flutter/material.dart';
+// --- Subscription Plan Model ---
+class SubscriptionPlan {
+  final String id;
+  final String name;
+  final double price;
+  final int durationDays;
+  final List<String> features;
+  final String description;
 
-// --- Global Constants (Already defined in profile_constants.dart, importing is sufficient) ---
-// Note: We don't redefine the colors here, we just use them in the pages/widgets.
-
-// --- Dummy Payment Data ---
-
-// Model for a single payment card/method
-class PaymentMethod {
-  final String title;
-  final String lastFourDigits;
-  final String type; // e.g., 'Visa', 'MasterCard', 'PayPal'
-  final IconData icon;
-
-  PaymentMethod({
-    required this.title,
-    required this.lastFourDigits,
-    required this.type,
-    required this.icon,
+  SubscriptionPlan({
+    required this.id,
+    required this.name,
+    required this.price,
+    required this.durationDays,
+    required this.features,
+    required this.description,
   });
 }
 
-// Model for a single transaction
-class Transaction {
-  final String description;
-  final String date;
+// --- Provider Subscription Model ---
+class ProviderSubscription {
+  final String subscriptionId;
+  final String planType;
   final double amount;
-  final bool isCredit; // true if incoming, false if outgoing (debit)
+  final DateTime startDate;
+  final DateTime endDate;
+  final String status; // 'active', 'expired', 'cancelled'
+  final String paymentMethod;
+
+  ProviderSubscription({
+    required this.subscriptionId,
+    required this.planType,
+    required this.amount,
+    required this.startDate,
+    required this.endDate,
+    required this.status,
+    required this.paymentMethod,
+  });
+}
+
+// --- Transaction Model ---
+class Transaction {
+  final String id;
+  final String description;
+  final DateTime date;
+  final double amount;
+  final bool isCredit;
+  final String status; // 'completed', 'pending', 'failed'
+  final String type; // 'subscription', 'withdrawal', 'refund'
 
   Transaction({
+    required this.id,
     required this.description,
     required this.date,
     required this.amount,
     required this.isCredit,
+    required this.status,
+    required this.type,
   });
 }
 
-final List<PaymentMethod> dummyPaymentMethods = [
-  PaymentMethod(
-    title: "Primary Debit Card",
-    lastFourDigits: "8045",
-    type: "Visa",
-    icon: Icons.credit_card_rounded,
+// --- Available Subscription Plans ---
+final List<SubscriptionPlan> subscriptionPlans = [
+  SubscriptionPlan(
+    id: 'basic',
+    name: 'Basic Package',
+    price: 5000.0,
+    durationDays: 30,
+    features: [
+      'Appear in search results',
+      'Basic profile',
+      'Contact information visible',
+    ],
+    description: 'Essential visibility for your business',
   ),
-  PaymentMethod(
-    title: "Secondary Credit",
-    lastFourDigits: "3109",
-    type: "MasterCard",
-    icon: Icons.credit_card_rounded,
+  SubscriptionPlan(
+    id: 'premium',
+    name: 'Premium Package',
+    price: 8000.0,
+    durationDays: 30,
+    features: [
+      'Appear in search results',
+      'Premium profile badge',
+      'Higher ranking in search',
+      'Priority customer support',
+    ],
+    description: 'Enhanced visibility and priority placement',
   ),
-  PaymentMethod(
-    title: "PayPal Account",
-    lastFourDigits: "p******l",
-    type: "PayPal",
-    icon: Icons.payment_rounded,
-  ),
-];
-
-final List<Transaction> dummyTransactions = [
-  Transaction(
-    description: "Subscription Renewal",
-    date: "Oct 1, 2025",
-    amount: 19.99,
-    isCredit: false,
-  ),
-  Transaction(
-    description: "Freelance Payment",
-    date: "Sep 28, 2025",
-    amount: 450.00,
-    isCredit: true,
-  ),
-  Transaction(
-    description: "App Store Purchase",
-    date: "Sep 25, 2025",
-    amount: 4.99,
-    isCredit: false,
-  ),
-  Transaction(
-    description: "ATM Withdrawal",
-    date: "Sep 20, 2025",
-    amount: 100.00,
-    isCredit: false,
+  SubscriptionPlan(
+    id: 'vip',
+    name: 'VIP Package',
+    price: 12000.0,
+    durationDays: 30,
+    features: [
+      'Appear in search results',
+      'VIP profile badge',
+      'Top ranking in search',
+      'Featured listing',
+      'Premium customer support',
+      'Analytics dashboard',
+    ],
+    description: 'Maximum visibility and premium features',
   ),
 ];

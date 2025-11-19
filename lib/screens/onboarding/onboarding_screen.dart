@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:myapp/screens/auth/login_screen.dart';
+import 'package:myapp/screens/auth/login/login_screen.dart';
 
 // --- Configuration ---
 class OnboardingPageModel {

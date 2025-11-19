@@ -4,57 +4,19 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 // --- YOUR APP IMPORTS ---
-import 'package:myapp/Models/ProviderModel.dart';
+import 'package:myapp/models/ProviderModel.dart';
 import 'package:myapp/screens/profile/provider_profile.dart';
 // Assumed to define colors/styles
 import 'package:myapp/screens/search/search_map_delegate.dart'; // Assumed to define CustomServiceSearchDelegate
 
-// --- DUMMY DATA (REQUIRED FOR MARKER CREATION) ---
-// Note: These need a valid GeoPoint and UID for marker creation.
-final List<ProviderModel> _dummyProvidersList = [
-  ProviderModel(
-    uid: 'p001',
-    name: 'Dr. Hiba',
-    profession: 'Physiotherapist',
-    description: 'Specializes in sports injuries.',
-    phone: '...',
-    whatsapp: '...',
-    address: 'Cairo Center',
-    rating: 4.9,
-    subscriptionActive: true,
-    userRef: FirebaseFirestore.instance.doc('users/hba'),
-    services: const [],
-    location: const GeoPoint(
-      30.05,
-      31.20,
-    ), // Matches one of the original LatLngs
-  ),
-  ProviderModel(
-    uid: 'p002',
-    name: 'Khaled Elec.',
-    profession: 'Electrician',
-    description: 'Certified for residential wiring.',
-    phone: '...',
-    whatsapp: '...',
-    address: 'Giza East',
-    rating: 4.5,
-    subscriptionActive: true,
-    userRef: FirebaseFirestore.instance.doc('users/khaled'),
-    services: const [],
-    location: const GeoPoint(
-      30.03,
-      31.25,
-    ), // Matches one of the original LatLngs
-  ),
-  // Add more dummy providers here, ensuring their GeoPoint matches the map's area (30.04, 31.23)
-];
-
-// Assuming kCardBackgroundColor, kLightBackgroundColor, kDarkTextColor, kMutedTextColor are defined in search_constants.dart
+// --- CONSTANTS (Pulled from search_constants.dart for immediate use) ---
 const Color kCardBackgroundColor = Colors.white;
 const Color kLightBackgroundColor = Color(0xFFF8F9FF);
 const Color kDarkTextColor = Color(0xFF323232);
 const Color kMutedTextColor = Color(0xFF969696);
-// --- END DUMMY DATA ---
+// --- END CONSTANTS ---
+
+// 💡 DUMMY DATA REMOVED: Data fetching will now happen via Firebase Firestore.
 
 class MapSearchPage extends StatefulWidget {
   const MapSearchPage({super.key});
@@ -68,19 +30,22 @@ class _MapSearchPageState extends State<MapSearchPage> {
   late BitmapDescriptor _customMarkerIcon;
   bool _isLoading = true;
 
-  // Set the initial position to be close to the dummy marker data (Cairo)
+  // Set the initial position (e.g., Cairo)
   static const CameraPosition _initialCameraPosition = CameraPosition(
     target: LatLng(30.0444, 31.2357),
     zoom: 12,
   );
 
   Set<Marker> _markers = {};
+  // The selectedFilters map is not used in the map display logic yet but kept.
   final Map<String, String> _selectedFilters = {};
 
   @override
   void initState() {
     super.initState();
     _initializeMapAssets();
+    // 💡 Start fetching providers immediately after initializing assets
+    _fetchProvidersFromFirebase();
   }
 
   Future<void> _initializeMapAssets() async {
@@ -91,19 +56,60 @@ class _MapSearchPageState extends State<MapSearchPage> {
     );
     _customMarkerIcon = icon;
 
-    // --- FIX APPLIED HERE ---
-    // 2. Call the real _loadMarkers function using the dummy data.
-    // NOTE: In a real app, this list would come from a Firestore fetch result.
-    _loadMarkers(_dummyProvidersList);
-    // -------------------------
+    // 💡 REMOVED: Removed the dummy data loading call from here.
+  }
 
-    // 3. Mark loading as complete and trigger a rebuild to show the map
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-      });
+  // --- NEW: FETCHING LOGIC WITH FIREBASE FILTER ---
+  Future<void> _fetchProvidersFromFirebase() async {
+    // We assume the collection is 'users' and providers are identified by role.
+    try {
+      final QuerySnapshot snapshot =
+          await FirebaseFirestore.instance
+              .collection('users')
+              .where('role', isEqualTo: 'provider') // <-- KEY FILTER
+              .get();
+
+      final List<ProviderModel> fetchedProviders =
+          snapshot.docs.map((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+
+            // Ensure you safely map GeoPoint and other fields
+            final GeoPoint? location = data['location'] as GeoPoint?;
+
+            // NOTE: You must ensure your ProviderModel constructor handles all these fields.
+            return ProviderModel(
+              uid: doc.id,
+              name: data['name'] ?? 'No Name',
+              profession: data['profession'] ?? 'Service Provider',
+              description: data['description'] ?? '',
+              phone: data['phone'] ?? '',
+              whatsapp: data['whatsapp'] ?? '',
+              address: data['address'] ?? 'Unknown location',
+              rating: (data['rating'] as num?)?.toDouble() ?? 0.0,
+              subscriptionActive: data['subscriptionActive'] ?? false,
+              userRef: doc.reference,
+              services:
+                  data['services'] is List
+                      ? List<String>.from(data['services'])
+                      : [],
+              location: location,
+            );
+          }).toList();
+
+      // Load markers onto the map using the filtered list
+      _loadMarkers(fetchedProviders);
+    } catch (e) {
+      print("Error fetching providers: $e");
+    } finally {
+      // Mark loading as complete regardless of success or failure
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
+  // --- END NEW LOGIC ---
 
   // Helper to convert data to actual Google Maps Markers
   void _loadMarkers(List<ProviderModel> availableProviders) {

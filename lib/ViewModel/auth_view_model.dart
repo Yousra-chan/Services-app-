@@ -21,123 +21,33 @@ class AuthViewModel with ChangeNotifier {
     _initializeAuthState();
   }
 
-  // ============ INITIALIZATION ============
-  Future<void> _initializeAuthState() async {
-    try {
-      _setLoading(true);
+  // ============ PUBLIC AUTH METHODS ============
 
-      // Listen to auth state changes
-      _authService.authStateChanges.listen(_handleAuthStateChange);
-
-      // Check initial state
-      final firebaseUser = _authService.getCurrentUser();
-      if (firebaseUser != null) {
-        await _fetchCurrentUser(firebaseUser.uid);
-      }
-    } catch (e) {
-      _setError('Failed to initialize authentication: $e');
-    } finally {
-      _setLoading(false);
-    }
-  }
-
-  void _handleAuthStateChange(User? firebaseUser) async {
-    if (firebaseUser != null) {
-      await _fetchCurrentUser(firebaseUser.uid);
-    } else {
-      _currentUser = null;
-      _error = null;
-      notifyListeners();
-    }
-  }
-
-  Future<void> _fetchCurrentUser(String uid) async {
-    try {
-      final userModel = await _userService.getUserById(uid);
-      if (userModel != null) {
-        _currentUser = userModel;
-        _error = null;
-        notifyListeners();
-      } else {
-        _setError('User profile not found');
-      }
-    } catch (e) {
-      _setError('Failed to load user profile: $e');
-    }
-  }
-
-  // ============ AUTH METHODS ============
   Future<UserModel?> login(String email, String password) async {
-    try {
-      _setLoading(true);
-      _setError(null);
-
-      // 1. Firebase authentication
+    return _executeAuthOperation(() async {
       final userCredential =
           await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
-      final String uid = userCredential.user!.uid;
-
-      // 2. Fetch user profile
-      try {
-        final userModel = await _userService.getUserById(uid);
-        _currentUser = userModel;
-        _error = null;
-        notifyListeners();
-        return userModel;
-      } catch (profileError) {
-        print('Warning: Failed to load UserModel profile: $profileError');
-        _setError('User profile not found');
-        return null;
-      }
-    } on FirebaseAuthException catch (e) {
-      final errorMessage = _getFirebaseAuthErrorMessage(e);
-      _setError(errorMessage);
-      return null;
-    } catch (e) {
-      _setError('Login failed: $e');
-      return null;
-    } finally {
-      _setLoading(false);
-    }
+      return await _fetchAndSetUser(userCredential.user!.uid);
+    }, 'Login');
   }
 
   Future<UserModel?> signInWithGoogle() async {
-    try {
-      _setLoading(true);
-      _setError(null);
-
+    return _executeAuthOperation(() async {
       final userModel = await _authService.signInWithGoogle();
-      _currentUser = userModel;
-      _error = null;
-      notifyListeners();
+      _setUser(userModel);
       return userModel;
-    } catch (e) {
-      _setError('Google sign-in failed: $e');
-      return null;
-    } finally {
-      _setLoading(false);
-    }
+    }, 'Google sign-in');
   }
 
   Future<UserModel?> signInWithApple() async {
-    try {
-      _setLoading(true);
-      _setError(null);
-
+    return _executeAuthOperation(() async {
       final userModel = await _authService.signInWithApple();
-      _currentUser = userModel;
-      _error = null;
-      notifyListeners();
+      _setUser(userModel);
       return userModel;
-    } catch (e) {
-      _setError('Apple sign-in failed: $e');
-      return null;
-    } finally {
-      _setLoading(false);
-    }
+    }, 'Apple sign-in');
   }
 
   Future<UserModel?> signup({
@@ -147,13 +57,10 @@ class AuthViewModel with ChangeNotifier {
     required String role,
     required String phone,
     required String address,
-    double? lat,
+    double? lat, // Make these optional to match register page
     double? lon,
   }) async {
-    try {
-      _setLoading(true);
-      _setError(null);
-
+    return _executeAuthOperation(() async {
       final userModel = await _authService.signup(
         name: name,
         email: email,
@@ -161,90 +68,34 @@ class AuthViewModel with ChangeNotifier {
         role: role,
         phone: phone,
         address: address,
-        lat: lat,
+        lat: lat, // Pass the optional parameters
         lon: lon,
       );
-      _currentUser = userModel;
-      _error = null;
-      notifyListeners();
+      _setUser(userModel);
       return userModel;
-    } on FirebaseAuthException catch (e) {
-      final errorMessage = _getFirebaseAuthErrorMessage(e);
-      _setError(errorMessage);
-      return null;
-    } catch (e) {
-      _setError('Sign up failed: $e');
-      return null;
-    } finally {
-      _setLoading(false);
-    }
+    }, 'Sign up');
   }
 
   Future<void> logout() async {
-    try {
-      _setLoading(true);
+    return _executeOperation(() async {
       await _authService.logout();
-      _currentUser = null;
-      _error = null;
-      notifyListeners();
-    } catch (e) {
-      _setError('Logout failed: $e');
-      rethrow;
-    } finally {
-      _setLoading(false);
-    }
+      _clearUser();
+    }, 'Logout');
   }
 
   Future<void> sendPasswordResetEmail(String email) async {
-    try {
-      _setLoading(true);
-      await _authService.sendPasswordResetEmail(email);
-    } on FirebaseAuthException catch (e) {
-      final errorMessage = _getFirebaseAuthErrorMessage(e);
-      _setError(errorMessage);
-      rethrow;
-    } catch (e) {
-      _setError('Password reset failed: $e');
-      rethrow;
-    } finally {
-      _setLoading(false);
-    }
+    return _executeOperation(
+      () => _authService.sendPasswordResetEmail(email),
+      'Password reset',
+    );
   }
 
   Future<void> updateUserProfile(UserModel updatedUser) async {
-    try {
-      _setLoading(true);
+    return _executeOperation(() async {
       await _userService.updateUser(updatedUser);
       _currentUser = updatedUser;
       notifyListeners();
-    } catch (e) {
-      _setError('Failed to update profile: $e');
-      rethrow;
-    } finally {
-      _setLoading(false);
-    }
-  }
-
-  // ============ ERROR HANDLING ============
-  String _getFirebaseAuthErrorMessage(FirebaseAuthException e) {
-    switch (e.code) {
-      case 'user-not-found':
-        return 'No user found with this email address';
-      case 'wrong-password':
-        return 'Incorrect password';
-      case 'invalid-email':
-        return 'Invalid email address';
-      case 'user-disabled':
-        return 'This account has been disabled';
-      case 'email-already-in-use':
-        return 'An account already exists with this email';
-      case 'weak-password':
-        return 'Password is too weak';
-      case 'network-request-failed':
-        return 'Network error. Please check your connection';
-      default:
-        return 'Authentication failed: ${e.message}';
-    }
+    }, 'Profile update');
   }
 
   void clearError() {
@@ -252,7 +103,108 @@ class AuthViewModel with ChangeNotifier {
     notifyListeners();
   }
 
-  // ============ PRIVATE HELPERS ============
+  // ============ PRIVATE METHODS ============
+
+  Future<void> _initializeAuthState() async {
+    await _executeOperation(() async {
+      _authService.authStateChanges.listen(_handleAuthStateChange);
+
+      final firebaseUser = _authService.getCurrentUser();
+      if (firebaseUser != null) {
+        await _fetchCurrentUser(firebaseUser.uid);
+      }
+    }, 'Initialization');
+  }
+
+  void _handleAuthStateChange(User? firebaseUser) async {
+    if (firebaseUser != null) {
+      await _fetchCurrentUser(firebaseUser.uid);
+    } else {
+      _clearUser();
+    }
+  }
+
+  Future<void> _fetchCurrentUser(String uid) async {
+    try {
+      final userModel = await _userService.getUserById(uid);
+      if (userModel != null) {
+        _setUser(userModel);
+      } else {
+        _setError('User profile not found');
+      }
+    } catch (e) {
+      _setError('Failed to load user profile: $e');
+    }
+  }
+
+  Future<UserModel?> _fetchAndSetUser(String uid) async {
+    try {
+      final userModel = await _userService.getUserById(uid);
+      _setUser(userModel);
+      return userModel;
+    } catch (e) {
+      debugPrint('Warning: Failed to load UserModel profile: $e');
+      _setError('User profile not found');
+      return null;
+    }
+  }
+
+  // ============ EXECUTION HELPERS ============
+
+  Future<UserModel?> _executeAuthOperation(
+    Future<UserModel?> Function() operation,
+    String operationName,
+  ) async {
+    try {
+      _setLoading(true);
+      _setError(null);
+      return await operation();
+    } on FirebaseAuthException catch (e) {
+      final errorMessage = _getFirebaseAuthErrorMessage(e);
+      _setError('$operationName failed: $errorMessage');
+      return null;
+    } catch (e) {
+      _setError('$operationName failed: $e');
+      return null;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  Future<void> _executeOperation(
+    Future<void> Function() operation,
+    String operationName,
+  ) async {
+    try {
+      _setLoading(true);
+      _setError(null);
+      await operation();
+    } on FirebaseAuthException catch (e) {
+      final errorMessage = _getFirebaseAuthErrorMessage(e);
+      _setError('$operationName failed: $errorMessage');
+      rethrow;
+    } catch (e) {
+      _setError('$operationName failed: $e');
+      rethrow;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  // ============ STATE MANAGEMENT ============
+
+  void _setUser(UserModel? user) {
+    _currentUser = user;
+    _error = null;
+    notifyListeners();
+  }
+
+  void _clearUser() {
+    _currentUser = null;
+    _error = null;
+    notifyListeners();
+  }
+
   void _setLoading(bool loading) {
     _isLoading = loading;
     notifyListeners();
@@ -261,5 +213,21 @@ class AuthViewModel with ChangeNotifier {
   void _setError(String? error) {
     _error = error;
     notifyListeners();
+  }
+
+  // ============ ERROR MAPPING ============
+
+  String _getFirebaseAuthErrorMessage(FirebaseAuthException e) {
+    const errorMessages = {
+      'user-not-found': 'No user found with this email address',
+      'wrong-password': 'Incorrect password',
+      'invalid-email': 'Invalid email address',
+      'user-disabled': 'This account has been disabled',
+      'email-already-in-use': 'An account already exists with this email',
+      'weak-password': 'Password is too weak',
+      'network-request-failed': 'Network error. Please check your connection',
+    };
+
+    return errorMessages[e.code] ?? 'Authentication failed: ${e.message}';
   }
 }

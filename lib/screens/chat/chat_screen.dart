@@ -7,20 +7,7 @@ import 'package:myapp/screens/chat/constants.dart';
 import 'package:myapp/screens/chat/disscussion/disscussion_page.dart';
 import 'package:intl/intl.dart';
 
-// Sample chat names for the stories section
-final List<String> chatNames = [
-  'John Doe',
-  'Sarah Wilson',
-  'Mike Johnson',
-  'Emma Davis',
-  'Alex Brown'
-];
-
-Widget buildAvatar(int index) {
-  bool isSearchIcon = index == 0;
-  final IconData defaultIcon =
-      isSearchIcon ? CupertinoIcons.search : CupertinoIcons.person_fill;
-
+Widget buildAvatar(bool isSearchIcon, [String imageUrl = '']) {
   return Container(
     width: 55,
     height: 55,
@@ -41,7 +28,19 @@ Widget buildAvatar(int index) {
     child: CircleAvatar(
       radius: 25,
       backgroundColor: isSearchIcon ? Colors.white : kLightGreyBlue,
-      child: Icon(defaultIcon, color: kPrimaryBlue, size: 26),
+      child: isSearchIcon
+          ? Icon(CupertinoIcons.search, color: kPrimaryBlue, size: 26)
+          : (imageUrl.isNotEmpty
+              ? ClipOval(
+                  child: Image.network(
+                    imageUrl,
+                    width: 50,
+                    height: 50,
+                    fit: BoxFit.cover,
+                  ),
+                )
+              : Icon(CupertinoIcons.person_fill,
+                  color: kPrimaryBlue, size: 26)),
     ),
   );
 }
@@ -204,7 +203,28 @@ class ChatPage extends StatefulWidget {
   State<ChatPage> createState() => _ChatPageState();
 }
 
-class _ChatPageState extends State<ChatPage> {
+class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // App came to foreground - you could reset badge here if needed
+      // For example, you could mark all messages as read when app comes to foreground
+      // and the chat screen is visible
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
@@ -235,7 +255,7 @@ class _ChatPageState extends State<ChatPage> {
       ),
       body: Column(
         children: [
-          // Section Stories/Status
+          // Section Stories/Status - Now shows only previous contacts
           Container(
             height: 110,
             decoration: const BoxDecoration(
@@ -245,38 +265,85 @@ class _ChatPageState extends State<ChatPage> {
                 bottomRight: Radius.circular(30),
               ),
             ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: chatNames.length + 1,
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                itemBuilder: (context, index) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        buildAvatar(index),
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4.0),
-                          child: Text(
-                            index == 0
-                                ? "Rechercher"
-                                : chatNames[index - 1].split(' ')[0],
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
-                              fontFamily: 'Exo2',
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
+            child: StreamBuilder<List<ChatModel>>(
+              stream: chatViewModel.userChatsStream,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(
+                    child: CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                     ),
                   );
-                },
-              ),
+                }
+
+                final chats = snapshot.data ?? [];
+
+                // Extract unique contacts from chats
+                final contacts =
+                    _extractContactsFromChats(chats, widget.userId);
+
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: contacts.length + 1, // +1 for search icon
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    itemBuilder: (context, index) {
+                      if (index == 0) {
+                        // Search icon
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              buildAvatar(true),
+                              const Padding(
+                                padding: EdgeInsets.only(top: 4.0),
+                                child: Text(
+                                  "Rechercher",
+                                  style: TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 12,
+                                    fontFamily: 'Exo2',
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+
+                      final contact = contacts[index - 1];
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            buildAvatar(false, contact['imageUrl']!),
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4.0),
+                              child: SizedBox(
+                                width: 60,
+                                child: Text(
+                                  contact['name']!,
+                                  style: const TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 12,
+                                    fontFamily: 'Exo2',
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
             ),
           ),
           const SizedBox(height: 15),
@@ -299,8 +366,9 @@ class _ChatPageState extends State<ChatPage> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.error_outline, color: Colors.red, size: 50),
-                        SizedBox(height: 10),
+                        const Icon(Icons.error_outline,
+                            color: Colors.red, size: 50),
+                        const SizedBox(height: 10),
                         Text('Erreur: ${snapshot.error}'),
                       ],
                     ),
@@ -319,7 +387,7 @@ class _ChatPageState extends State<ChatPage> {
                           color: kMutedTextColor,
                           size: 50,
                         ),
-                        SizedBox(height: 10),
+                        const SizedBox(height: 10),
                         Text(
                           'Aucune discussion',
                           style: TextStyle(
@@ -327,11 +395,15 @@ class _ChatPageState extends State<ChatPage> {
                             fontSize: 16,
                           ),
                         ),
-                        SizedBox(height: 20),
+                        const SizedBox(height: 20),
                         ElevatedButton(
                           onPressed: () =>
                               _createNewChat(context, chatViewModel),
-                          child: Text('Commencer une discussion'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: kPrimaryBlue,
+                            foregroundColor: Colors.white,
+                          ),
+                          child: const Text('Commencer une discussion'),
                         ),
                       ],
                     ),
@@ -364,8 +436,7 @@ class _ChatPageState extends State<ChatPage> {
                                     isOnline: true,
                                     chatId: chat.chatId,
                                     currentUserId: widget.userId,
-                                    chatViewModel:
-                                        chatViewModel, // Pass the view model
+                                    chatViewModel: chatViewModel,
                                   ),
                                 ),
                               );
@@ -396,6 +467,28 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
+  // Extract unique contacts from chats
+  List<Map<String, String>> _extractContactsFromChats(
+      List<ChatModel> chats, String currentUserId) {
+    final contacts = <String, Map<String, String>>{};
+
+    for (final chat in chats) {
+      final otherUserId =
+          chat.clientId == currentUserId ? chat.providerId : chat.clientId;
+      final contactName = chat.getOtherParticipantName(currentUserId);
+
+      if (!contacts.containsKey(otherUserId)) {
+        contacts[otherUserId] = {
+          'id': otherUserId,
+          'name': contactName,
+          'imageUrl': '', // You can add profile image URL here if available
+        };
+      }
+    }
+
+    return contacts.values.toList();
+  }
+
   void _showProviderSelection(
       BuildContext context, ChatViewModel chatViewModel) {
     showModalBottomSheet(
@@ -405,7 +498,7 @@ class _ChatPageState extends State<ChatPage> {
           future: chatViewModel.getAvailableProviders(),
           builder: (context, snapshot) {
             return Container(
-              padding: EdgeInsets.all(16),
+              padding: const EdgeInsets.all(16),
               height: 400,
               child: Column(
                 children: [
@@ -417,14 +510,14 @@ class _ChatPageState extends State<ChatPage> {
                       color: kPrimaryBlue,
                     ),
                   ),
-                  SizedBox(height: 16),
+                  const SizedBox(height: 16),
                   Expanded(
                     child: snapshot.connectionState == ConnectionState.waiting
-                        ? Center(child: CircularProgressIndicator())
+                        ? const Center(child: CircularProgressIndicator())
                         : snapshot.hasError
-                            ? Center(child: Text('Erreur de chargement'))
+                            ? const Center(child: Text('Erreur de chargement'))
                             : snapshot.data!.isEmpty
-                                ? Center(
+                                ? const Center(
                                     child: Text('Aucun prestataire disponible'))
                                 : ListView.builder(
                                     itemCount: snapshot.data!.length,
@@ -471,14 +564,14 @@ class _ChatPageState extends State<ChatPage> {
         .then((chatId) {
       if (chatId != null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text('Discussion créée avec succès!'),
             backgroundColor: Colors.green,
           ),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text('Erreur lors de la création'),
             backgroundColor: Colors.red,
           ),

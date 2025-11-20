@@ -1,15 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:provider/provider.dart'; // REQUIRED
 import 'posts_constants.dart';
 
+// --- NEW IMPORTS REQUIRED FOR CHAT ---
+import 'package:myapp/ViewModel/auth_view_model.dart';
+import 'package:myapp/ViewModel/chat_view_model.dart';
+import 'package:myapp/screens/chat/disscussion/disscussion_page.dart';
+// Note: You may need to import your 'Post' model definition if it's not here.
+// Note: You may need to import your 'ProviderModel' definition if your post stores the full provider object.
 
-
+// --- POST CARD WIDGET ---
 class PostCard extends StatelessWidget {
   final Post post;
 
   const PostCard({super.key, required this.post});
 
-  // Helper to format the timestamp (e.g., "3h ago", "1d ago")
   String _formatTime(DateTime timestamp) {
     final difference = DateTime.now().difference(timestamp);
     if (difference.inHours < 24) {
@@ -21,9 +27,82 @@ class PostCard extends StatelessWidget {
     return '${difference.inDays}d ago';
   }
 
+  // --- NEW HANDLER FUNCTION ---
+  Future<void> _handleChatPress(BuildContext context) async {
+    final authViewModel = Provider.of<AuthViewModel>(context, listen: false);
+    final currentUser = authViewModel.currentUser;
+
+    final String peerId = post.userId;
+
+    if (currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please sign in to contact a user.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    if (currentUser.uid == peerId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You cannot chat with yourself.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    // Show temporary loading indicator
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Starting chat...'),
+        duration: Duration(seconds: 1),
+      ),
+    );
+
+    try {
+      // 1. Initialize ChatViewModel
+      final chatViewModel = ChatViewModel(userId: currentUser.uid);
+
+      // 2. Get or Create the Chat ID
+      final chatId = await chatViewModel.createChat(
+        clientId: currentUser.uid,
+        providerId: peerId,
+      );
+
+      if (chatId != null && context.mounted) {
+        // 3. Navigate to Discussion Page
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => DiscussionPage(
+              chatId: chatId,
+              currentUserId: currentUser.uid,
+              contactName: post.user, // Use the post author's name
+              isOnline: true, // Placeholder
+              chatViewModel: chatViewModel,
+            ),
+          ),
+        );
+      } else if (context.mounted) {
+        throw Exception("Failed to retrieve or create chat ID.");
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: Could not start chat. $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Determine color and text based on post type
     final Color typeColor =
         post.type == PostType.seeking ? kSeekingColor : kOfferingColor;
     final String typeLabel =
@@ -46,15 +125,14 @@ class PostCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header: User, Type Badge, and Time
+          // User Info Row (Avatar, Name, Type, Time)
           Row(
             children: [
-              // User/Avatar Placeholder
               CircleAvatar(
                 backgroundColor: typeColor.withOpacity(0.2),
                 radius: 18,
                 child: Text(
-                  post.user[0],
+                  post.user.isNotEmpty ? post.user[0] : '?',
                   style: TextStyle(
                     color: typeColor,
                     fontWeight: FontWeight.bold,
@@ -62,8 +140,6 @@ class PostCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 10),
-
-              // User Name
               Expanded(
                 child: Text(
                   post.user,
@@ -75,8 +151,6 @@ class PostCard extends StatelessWidget {
                   ),
                 ),
               ),
-
-              // Type Badge (I Need / I Offer)
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 10,
@@ -97,8 +171,6 @@ class PostCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 10),
-
-              // Timestamp
               Text(
                 _formatTime(post.timestamp),
                 style: const TextStyle(
@@ -116,7 +188,7 @@ class PostCard extends StatelessWidget {
             color: kLightBackgroundColor,
           ),
 
-          // Title
+          // Post Title and Body
           Text(
             post.title,
             style: const TextStyle(
@@ -127,8 +199,6 @@ class PostCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-
-          // Body/Description
           Text(
             post.body,
             maxLines: 3,
@@ -142,11 +212,11 @@ class PostCard extends StatelessWidget {
           ),
           const SizedBox(height: 15),
 
-          // Footer: Category and Action Button
+          // Category and Contact Button Row
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Category Chip
+              // Category Tag
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
@@ -165,18 +235,10 @@ class PostCard extends StatelessWidget {
                 ),
               ),
 
-              // Action Button
+              // Contact Button (UPDATED HERE)
               TextButton.icon(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        "Contacting ${post.user} for ${post.serviceCategory}...",
-                        style: const TextStyle(fontFamily: 'Exo2'),
-                      ),
-                    ),
-                  );
-                },
+                onPressed: () =>
+                    _handleChatPress(context), // Calling the new handler
                 icon: const Icon(
                   CupertinoIcons.chat_bubble_2,
                   color: kPrimaryBlue,
@@ -199,7 +261,7 @@ class PostCard extends StatelessWidget {
   }
 }
 
-// --- Create Post Modal Widget ---
+// --- CREATE POST MODAL WIDGET ---
 
 class CreatePostModal extends StatefulWidget {
   final Function(Post post) onPostCreated;
@@ -214,8 +276,8 @@ class _CreatePostModalState extends State<CreatePostModal> {
   final _formKey = GlobalKey<FormState>();
   String _title = '';
   String _body = '';
-  PostType _type = PostType.seeking; // Default to seeking
-  String _serviceCategory = 'Electrician'; // Default
+  PostType _type = PostType.seeking;
+  String _serviceCategory = 'Electrician';
 
   final List<String> categories = [
     "Electrician",
@@ -229,17 +291,44 @@ class _CreatePostModalState extends State<CreatePostModal> {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
 
-      // Create a mock post object
+      // Get current user data using Provider
+      final authViewModel = Provider.of<AuthViewModel>(context, listen: false);
+      final currentUser = authViewModel.currentUser;
+
+      if (currentUser == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Error: You must be logged in to create a post.'),
+            backgroundColor: kSeekingColor,
+          ),
+        );
+        return;
+      }
+
+      // Determine the user's display name, using email as a fallback
+      // We assume UserModel has both 'name' (for display) and 'email'
+      final String userName = currentUser.name ??
+          currentUser.email ??
+          'Anonymous User'; // <-- FIX: Use email as a better fallback
+
+      // Create the new post object
       final newPost = Post(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
         title: _title,
         body: _body,
-        user: "Current User", // Placeholder user name
+
+        // Use the determined user name
+        user: userName,
+
+        userId: currentUser.uid,
         type: _type,
         serviceCategory: _serviceCategory,
         timestamp: DateTime.now(),
       );
 
+      // Pass the data back to the parent (FeedScreen)
       widget.onPostCreated(newPost);
+
       // Close the modal
       Navigator.pop(context);
     }
@@ -247,7 +336,6 @@ class _CreatePostModalState extends State<CreatePostModal> {
 
   @override
   Widget build(BuildContext context) {
-    // Dynamically change color based on selected post type
     final typeColor =
         _type == PostType.seeking ? kSeekingColor : kOfferingColor;
 
@@ -287,41 +375,32 @@ class _CreatePostModalState extends State<CreatePostModal> {
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children:
-                      PostType.values.map((type) {
-                        bool isSelected = _type == type;
-                        return Expanded(
-                          child: GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                _type = type;
-                              });
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 15),
-                              decoration: BoxDecoration(
-                                color:
-                                    isSelected ? typeColor : Colors.transparent,
-                                borderRadius: BorderRadius.circular(15),
-                              ),
-                              child: Text(
-                                type == PostType.seeking
-                                    ? "I Need Service"
-                                    : "I Offer Service",
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color:
-                                      isSelected
-                                          ? Colors.white
-                                          : kDarkTextColor,
-                                  fontWeight: FontWeight.bold,
-                                  fontFamily: 'Exo2',
-                                ),
-                              ),
+                  children: PostType.values.map((type) {
+                    bool isSelected = _type == type;
+                    return Expanded(
+                      child: GestureDetector(
+                        onTap: () => setState(() => _type = type),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 15),
+                          decoration: BoxDecoration(
+                            color: isSelected ? typeColor : Colors.transparent,
+                            borderRadius: BorderRadius.circular(15),
+                          ),
+                          child: Text(
+                            type == PostType.seeking
+                                ? "I Need Service"
+                                : "I Offer Service",
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: isSelected ? Colors.white : kDarkTextColor,
+                              fontWeight: FontWeight.bold,
+                              fontFamily: 'Exo2',
                             ),
                           ),
-                        );
-                      }).toList(),
+                        ),
+                      ),
+                    );
+                  }).toList(),
                 ),
               ),
               const SizedBox(height: 20),
@@ -329,11 +408,10 @@ class _CreatePostModalState extends State<CreatePostModal> {
               // Title Input
               TextFormField(
                 decoration: _inputDecoration(
-                  'Title (e.g., Need Electrician in North District)',
-                ),
+                    'Title (e.g., Need Electrician in North District)'),
                 maxLength: 50,
-                validator:
-                    (value) => value!.isEmpty ? 'Title cannot be empty' : null,
+                validator: (value) =>
+                    value!.isEmpty ? 'Title cannot be empty' : null,
                 onSaved: (value) => _title = value!,
               ),
               const SizedBox(height: 10),
@@ -341,13 +419,11 @@ class _CreatePostModalState extends State<CreatePostModal> {
               // Body Input
               TextFormField(
                 decoration: _inputDecoration(
-                  'Describe your needs or service offered...',
-                ),
+                    'Describe your needs or service offered...'),
                 maxLines: 4,
                 maxLength: 200,
-                validator:
-                    (value) =>
-                        value!.length < 10 ? 'Description is too short' : null,
+                validator: (value) =>
+                    value!.length < 10 ? 'Description is too short' : null,
                 onSaved: (value) => _body = value!,
               ),
               const SizedBox(height: 20),
@@ -364,10 +440,8 @@ class _CreatePostModalState extends State<CreatePostModal> {
                   child: DropdownButton<String>(
                     value: _serviceCategory,
                     isExpanded: true,
-                    icon: const Icon(
-                      CupertinoIcons.chevron_down,
-                      color: kPrimaryBlue,
-                    ),
+                    icon: const Icon(CupertinoIcons.chevron_down,
+                        color: kPrimaryBlue),
                     style: const TextStyle(
                       color: kDarkTextColor,
                       fontSize: 16,
@@ -375,20 +449,16 @@ class _CreatePostModalState extends State<CreatePostModal> {
                     ),
                     onChanged: (String? newValue) {
                       if (newValue != null) {
-                        setState(() {
-                          _serviceCategory = newValue;
-                        });
+                        setState(() => _serviceCategory = newValue);
                       }
                     },
-                    items:
-                        categories.map<DropdownMenuItem<String>>((
-                          String value,
-                        ) {
-                          return DropdownMenuItem<String>(
-                            value: value,
-                            child: Text(value),
-                          );
-                        }).toList(),
+                    items: categories
+                        .map<DropdownMenuItem<String>>((String value) {
+                      return DropdownMenuItem<String>(
+                        value: value,
+                        child: Text(value),
+                      );
+                    }).toList(),
                   ),
                 ),
               ),
@@ -422,7 +492,6 @@ class _CreatePostModalState extends State<CreatePostModal> {
     );
   }
 
-  // Consistent Input Decoration style
   InputDecoration _inputDecoration(String label) {
     return InputDecoration(
       labelText: label,

@@ -14,3 +14,5 @@ const Color kOnlineStatusGreen = Color.fromARGB(255, 76, 175, 80);
 const Color kSoftShadowColor = Color.fromARGB(50, 87, 101, 240);
 const Color kLightTextColor = Color.fromARGB(255, 248, 249, 255);
 const Color kDangerColor = Color.fromARGB(255, 239, 83, 80);
+// Accent color
+const Color kAccentColor = Color.fromARGB(255, 255, 193, 7);

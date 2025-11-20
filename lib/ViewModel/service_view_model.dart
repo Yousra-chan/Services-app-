@@ -1,112 +1,144 @@
-import 'package:flutter/material.dart';
-import '../services/services_service.dart';
-import '../models/servicesmodel.dart';
+import 'package:flutter/foundation.dart';
+import 'package:myapp/Services/services_service.dart';
+import 'package:myapp/models/ServicesModel.dart';
 
-class ServiceViewModel extends ChangeNotifier {
-  final ServicesService _serviceService = ServicesService();
+class ServiceViewModel with ChangeNotifier {
+  final ServiceService _serviceService = ServiceService();
 
-  List<ServiceModel> services = [];
-  bool isLoading = false;
-  String? errorMessage;
+  List<Service> _services = [];
+  bool _isLoading = false;
+  String? _error;
 
-  /// General function to fetch and populate the primary 'services' list
-  Future<void> fetchServices() async {
-    isLoading = true;
-    errorMessage = null;
-    notifyListeners();
+  List<Service> get services => _services;
+  bool get isLoading => _isLoading;
+  String? get error => _error;
 
-    try {
-      services = await _serviceService.getAllServices();
-    } catch (e) {
-      errorMessage = 'Failed to load all services: $e';
-      services = [];
-    } finally {
-      isLoading = false;
-      notifyListeners();
-    }
+  // Get services by provider
+  List<Service> getServicesByProvider(String providerId) {
+    return _services
+        .where((service) => service.providerId == providerId)
+        .toList();
   }
 
-  // --- Focused Read Operations (for non-primary views) ---
-
-  /// Fetches services filtered by category (does NOT update the primary 'services' list)
-  Future<List<ServiceModel>> getServicesByCategory(String category) async {
+  // Create new service
+  Future<bool> createService({
+    required String providerId,
+    required String title,
+    required String description,
+    required String category,
+    required double price,
+    required String priceUnit,
+    required String location,
+    double? latitude,
+    double? longitude,
+    List<String> images = const [],
+    List<String> tags = const [],
+  }) async {
     try {
-      return await _serviceService.getServicesByCategory(category);
-    } catch (e) {
-      print('Error fetching services by category: $e');
-      // Throw the exception or return an empty list based on expected UI behavior
-      return [];
-    }
-  }
+      _setLoading(true);
+      _setError(null);
 
-  /// Fetches services offered by a specific provider (useful for provider profile)
-  Future<List<ServiceModel>> getServicesByProvider(String providerId) async {
-    try {
-      return await _serviceService.getServicesByProvider(providerId);
-    } catch (e) {
-      print('Error fetching services by provider: $e');
-      return [];
-    }
-  }
+      final service = await _serviceService.createService(
+        providerId: providerId,
+        title: title,
+        description: description,
+        category: category,
+        price: price,
+        priceUnit: priceUnit,
+        location: location,
+        latitude: latitude,
+        longitude: longitude,
+        images: images,
+        tags: tags,
+      );
 
-  // --- CRUD Operations ---
-
-  /// Creates a new service and updates the local list
-  Future<void> createService(ServiceModel service) async {
-    isLoading = true;
-    errorMessage = null;
-    notifyListeners();
-
-    try {
-      await _serviceService.createService(service);
-      // Immediately add the service to the local list (it now has an ID)
-      services.add(service);
-    } catch (e) {
-      errorMessage = 'Failed to create service: $e';
-    } finally {
-      isLoading = false;
-      notifyListeners();
-    }
-  }
-
-  /// Updates an existing service and updates the local list
-  Future<void> updateService(ServiceModel service) async {
-    isLoading = true;
-    errorMessage = null;
-    notifyListeners();
-
-    try {
-      await _serviceService.updateService(service);
-
-      // Find and replace the old service object in the local list
-      final index = services.indexWhere((s) => s.id == service.id);
-      if (index != -1) {
-        services[index] = service;
+      if (service != null) {
+        _services.add(service);
+        notifyListeners();
+        return true;
       }
+      return false;
     } catch (e) {
-      errorMessage = 'Failed to update service: $e';
+      _setError('Failed to create service: $e');
+      return false;
     } finally {
-      isLoading = false;
-      notifyListeners();
+      _setLoading(false);
     }
   }
 
-  /// Deletes a service and removes it from the local list
-  Future<void> deleteService(String serviceId) async {
-    isLoading = true;
-    errorMessage = null;
-    notifyListeners();
-
+  // Load services for provider
+  Future<void> loadProviderServices(String providerId) async {
     try {
-      await _serviceService.deleteService(serviceId);
+      _setLoading(true);
+      _setError(null);
 
-      // Remove the service from the local list
-      services.removeWhere((s) => s.id == serviceId);
-    } catch (e) {
-      errorMessage = 'Failed to delete service: $e';
-    } finally {
-      isLoading = false;
+      final services = await _serviceService.getServicesByProvider(providerId);
+      _services = services;
       notifyListeners();
+    } catch (e) {
+      _setError('Failed to load services: $e');
+    } finally {
+      _setLoading(false);
     }
+  }
+
+  // Update service
+  Future<bool> updateService(Service updatedService) async {
+    try {
+      _setLoading(true);
+      _setError(null);
+
+      final success = await _serviceService.updateService(updatedService);
+      if (success) {
+        final index = _services.indexWhere((s) => s.id == updatedService.id);
+        if (index != -1) {
+          _services[index] = updatedService;
+          notifyListeners();
+        }
+        return true;
+      }
+      return false;
+    } catch (e) {
+      _setError('Failed to update service: $e');
+      return false;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  // Delete service
+  Future<bool> deleteService(String serviceId) async {
+    try {
+      _setLoading(true);
+      _setError(null);
+
+      final success = await _serviceService.deleteService(serviceId);
+      if (success) {
+        _services.removeWhere((s) => s.id == serviceId);
+        notifyListeners();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      _setError('Failed to delete service: $e');
+      return false;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  void _setLoading(bool loading) {
+    _isLoading = loading;
+    notifyListeners();
+  }
+
+  void _setError(String? error) {
+    _error = error;
+    notifyListeners();
+  }
+
+  void clearError() {
+    _error = null;
+    notifyListeners();
   }
 }

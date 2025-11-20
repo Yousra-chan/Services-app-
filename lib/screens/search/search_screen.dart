@@ -63,38 +63,35 @@ class _MapSearchPageState extends State<MapSearchPage> {
   Future<void> _fetchProvidersFromFirebase() async {
     // We assume the collection is 'users' and providers are identified by role.
     try {
-      final QuerySnapshot snapshot =
-          await FirebaseFirestore.instance
-              .collection('users')
-              .where('role', isEqualTo: 'provider') // <-- KEY FILTER
-              .get();
+      final QuerySnapshot snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .where('role', isEqualTo: 'provider') // <-- KEY FILTER
+          .get();
 
-      final List<ProviderModel> fetchedProviders =
-          snapshot.docs.map((doc) {
-            final data = doc.data() as Map<String, dynamic>;
+      final List<ProviderModel> fetchedProviders = snapshot.docs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
 
-            // Ensure you safely map GeoPoint and other fields
-            final GeoPoint? location = data['location'] as GeoPoint?;
+        // Ensure you safely map GeoPoint and other fields
+        final GeoPoint? location = data['location'] as GeoPoint?;
 
-            // NOTE: You must ensure your ProviderModel constructor handles all these fields.
-            return ProviderModel(
-              uid: doc.id,
-              name: data['name'] ?? 'No Name',
-              profession: data['profession'] ?? 'Service Provider',
-              description: data['description'] ?? '',
-              phone: data['phone'] ?? '',
-              whatsapp: data['whatsapp'] ?? '',
-              address: data['address'] ?? 'Unknown location',
-              rating: (data['rating'] as num?)?.toDouble() ?? 0.0,
-              subscriptionActive: data['subscriptionActive'] ?? false,
-              userRef: doc.reference,
-              services:
-                  data['services'] is List
-                      ? List<String>.from(data['services'])
-                      : [],
-              location: location,
-            );
-          }).toList();
+        // NOTE: You must ensure your ProviderModel constructor handles all these fields.
+        return ProviderModel(
+          uid: doc.id,
+          name: data['name'] ?? 'No Name',
+          profession: data['profession'] ?? 'Service Provider',
+          description: data['description'] ?? '',
+          phone: data['phone'] ?? '',
+          whatsapp: data['whatsapp'] ?? '',
+          address: data['address'] ?? 'Unknown location',
+          rating: (data['rating'] as num?)?.toDouble() ?? 0.0,
+          subscriptionActive: data['subscriptionActive'] ?? false,
+          userRef: doc.reference,
+          services: data['services'] is List
+              ? List<String>.from(data['services'])
+              : [],
+          location: location,
+        );
+      }).toList();
 
       // Load markers onto the map using the filtered list
       _loadMarkers(fetchedProviders);
@@ -149,7 +146,7 @@ class _MapSearchPageState extends State<MapSearchPage> {
     // Use Navigator to push the ProviderProfilePage when a marker is tapped.
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => ProviderProfilePage(provider: provider),
+        builder: (context) => ProviderProfilePage(providerId: provider.uid!),
       ),
     );
   }
@@ -160,22 +157,21 @@ class _MapSearchPageState extends State<MapSearchPage> {
       body: Stack(
         children: [
           SizedBox.expand(
-            child:
-                _isLoading
-                    ? const Center(
-                      child: CircularProgressIndicator(),
-                    ) // Show loader while assets load
-                    : GoogleMap(
-                      mapType: MapType.normal,
-                      initialCameraPosition: _initialCameraPosition,
-                      onMapCreated: (GoogleMapController controller) {
-                        _mapController = controller;
-                      },
-                      markers: _markers, // Displaying the loaded markers
-                      myLocationEnabled: true,
-                      zoomControlsEnabled: false,
-                      padding: const EdgeInsets.only(bottom: 100.0),
-                    ),
+            child: _isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(),
+                  ) // Show loader while assets load
+                : GoogleMap(
+                    mapType: MapType.normal,
+                    initialCameraPosition: _initialCameraPosition,
+                    onMapCreated: (GoogleMapController controller) {
+                      _mapController = controller;
+                    },
+                    markers: _markers, // Displaying the loaded markers
+                    myLocationEnabled: true,
+                    zoomControlsEnabled: false,
+                    padding: const EdgeInsets.only(bottom: 100.0),
+                  ),
           ),
 
           // 2. Overlaid Search/Filter Bar at the Top

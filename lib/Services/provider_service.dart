@@ -1,107 +1,135 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'dart:math'; // FIX: Required for sin, cos, sqrt, atan2
-import '../models/providermodel.dart';
+import 'package:myapp/models/ProviderModel.dart';
 
 class ProviderService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final String _collectionName = 'users';
 
-  /// Create a new provider document
-  Future<void> createProvider(ProviderModel provider) async {
-    final docRef = _firestore.collection('providers').doc();
-    // FIX: This now works because uid is NOT final in the model
-    provider.uid = docRef.id;
-    await docRef.set(provider.toMap());
-  }
-
-  /// Update existing provider document
-  Future<void> updateProvider(ProviderModel provider) async {
-    if (provider.uid == null) throw Exception('Provider ID is null');
-    await _firestore
-        .collection('providers')
-        .doc(provider.uid)
-        .update(provider.toMap());
-  }
-
-  /// Fetch all providers
+  // ADD THIS MISSING METHOD:
+  /// Get all active providers
   Future<List<ProviderModel>> getAllProviders() async {
-    final snapshot = await _firestore.collection('providers').get();
-    return snapshot.docs
-        .map((doc) => ProviderModel.fromMap(doc.data(), doc.id)) // Pass doc.id
-        .toList();
+    try {
+      final querySnapshot = await _firestore
+          .collection(_collectionName)
+          .where('role', isEqualTo: 'provider')
+          .where('subscriptionActive', isEqualTo: true)
+          .get();
+
+      return querySnapshot.docs
+          .map((doc) => ProviderModel.fromMap(doc.data(), doc.id))
+          .toList();
+    } catch (e) {
+      throw Exception('Failed to get all providers: $e');
+    }
   }
 
-  /// Fetch provider by ID
-  Future<ProviderModel?> getProviderById(String id) async {
-    final doc = await _firestore.collection('providers').doc(id).get();
-    if (!doc.exists) return null;
-    return ProviderModel.fromMap(doc.data()!, doc.id); // Pass doc.id
+  // Get provider by ID
+  Future<ProviderModel?> getProviderById(String providerId) async {
+    try {
+      final doc =
+          await _firestore.collection(_collectionName).doc(providerId).get();
+
+      if (!doc.exists) {
+        return null;
+      }
+
+      final data = doc.data() as Map<String, dynamic>;
+
+      // Check if user is actually a provider
+      if (data['role'] != 'provider') {
+        throw Exception('User is not a provider');
+      }
+
+      return ProviderModel.fromMap(data, doc.id);
+    } catch (e) {
+      throw Exception('Failed to get provider: $e');
+    }
   }
 
-  /// Fetch providers by service ID
-  Future<List<ProviderModel>> getProvidersByService(String serviceId) async {
-    final snapshot =
-        await _firestore
-            .collection('providers')
-            .where('services', arrayContains: serviceId)
-            .get();
+  // Get provider gallery images
+  Future<List<String>> getProviderGallery(String providerId) async {
+    try {
+      final doc = await _firestore
+          .collection('provider_galleries')
+          .doc(providerId)
+          .get();
 
-    return snapshot.docs
-        .map((doc) => ProviderModel.fromMap(doc.data(), doc.id)) // Pass doc.id
-        .toList();
+      if (!doc.exists) {
+        return [];
+      }
+
+      final data = doc.data() as Map<String, dynamic>;
+      final images = data['images'] as List<dynamic>?;
+
+      return images?.cast<String>() ?? [];
+    } catch (e) {
+      return [];
+    }
   }
 
-  /// Fetch providers near a location within a radius (meters)
-  Future<List<ProviderModel>> getProvidersNearby(
-    double userLat,
-    double userLng,
-    double radiusMeters,
-  ) async {
-    final snapshot = await _firestore.collection('providers').get();
+  // Get featured providers
+  Future<List<ProviderModel>> getFeaturedProviders({int limit = 10}) async {
+    try {
+      final querySnapshot = await _firestore
+          .collection(_collectionName)
+          .where('role', isEqualTo: 'provider')
+          .where('subscriptionActive', isEqualTo: true)
+          .where('rating', isGreaterThan: 4.0)
+          .orderBy('rating', descending: true)
+          .limit(limit)
+          .get();
 
-    final nearbyProviders =
-        snapshot.docs
-            .map((doc) {
-              final provider = ProviderModel.fromMap(
-                doc.data(),
-                doc.id,
-              ); // Pass doc.id
-              if (provider.location == null) return null;
-
-              double distance = _calculateDistance(
-                userLat,
-                userLng,
-                provider.location!.latitude, // Use GeoPoint properties
-                provider.location!.longitude, // Use GeoPoint properties
-              );
-
-              return distance <= radiusMeters ? provider : null;
-            })
-            .where((p) => p != null)
-            .cast<ProviderModel>()
-            .toList();
-
-    return nearbyProviders;
+      return querySnapshot.docs
+          .map((doc) => ProviderModel.fromMap(doc.data(), doc.id))
+          .toList();
+    } catch (e) {
+      throw Exception('Failed to get featured providers: $e');
+    }
   }
 
-  /// Helper: calculate distance in meters between two points using Haversine formula
-  double _calculateDistance(
-    double lat1,
-    double lng1,
-    double lat2,
-    double lng2,
-  ) {
-    const double earthRadius = 6371000; // meters
-    double dLat = _deg2rad(lat2 - lat1);
-    double dLng = _deg2rad(lng2 - lng1);
-    double a =
-        (sin(dLat / 2) * sin(dLat / 2)) +
-        cos(_deg2rad(lat1)) *
-            cos(_deg2rad(lat2)) *
-            (sin(dLng / 2) * sin(dLng / 2));
-    double c = 2 * atan2(sqrt(a), sqrt(1 - a));
-    return earthRadius * c;
+  // Get providers by category
+  Future<List<ProviderModel>> getProvidersByCategory(String category) async {
+    try {
+      final querySnapshot = await _firestore
+          .collection(_collectionName)
+          .where('role', isEqualTo: 'provider')
+          .where('subscriptionActive', isEqualTo: true)
+          .where('services', arrayContains: category)
+          .get();
+
+      return querySnapshot.docs
+          .map((doc) => ProviderModel.fromMap(doc.data(), doc.id))
+          .toList();
+    } catch (e) {
+      throw Exception('Failed to get providers by category: $e');
+    }
   }
 
-  /// Helper: converts degrees to radians
-  double _deg2rad(double deg) => deg * (pi / 180.0);
+  // Update provider rating
+  Future<void> updateProviderRating(String providerId, double newRating) async {
+    try {
+      await _firestore
+          .collection(_collectionName)
+          .doc(providerId)
+          .update({'rating': newRating});
+    } catch (e) {
+      throw Exception('Failed to update provider rating: $e');
+    }
+  }
+
+  // Check if provider exists and is active
+  Future<bool> isProviderActive(String providerId) async {
+    try {
+      final doc =
+          await _firestore.collection(_collectionName).doc(providerId).get();
+
+      if (!doc.exists) return false;
+
+      final data = doc.data() as Map<String, dynamic>;
+      return data['role'] == 'provider' &&
+          (data['subscriptionActive'] ?? false);
+    } catch (e) {
+      throw Exception('Failed to check provider status: $e');
+    }
+  }
 }

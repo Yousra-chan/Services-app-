@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/provider_service.dart';
-import '../models/providermodel.dart';
+import '../models/ProviderModel.dart';
 
 class ProviderViewModel extends ChangeNotifier {
   final ProviderService _providerService = ProviderService();

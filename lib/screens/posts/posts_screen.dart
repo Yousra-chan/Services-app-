@@ -1,52 +1,48 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-// Note: Assuming Post, dummyPosts are here.
+import 'package:myapp/Services/firestore_service.dart';
 import 'posts_constants.dart';
-// Note: Assuming PostCard is here.
-import 'posts_widgets.dart';
+import 'package:myapp/screens/posts/posts_widgets.dart';
 
-class PostScreen extends StatefulWidget {
-  const PostScreen({super.key});
+class FeedScreen extends StatefulWidget {
+  const FeedScreen({super.key});
 
   @override
-  State<PostScreen> createState() => _PostScreenState();
+  State<FeedScreen> createState() => _FeedScreenState();
 }
 
-class _PostScreenState extends State<PostScreen> {
-  // The state holds the list of posts, initialized with dummy data
-  final List<Post> _posts = dummyPosts;
+class _FeedScreenState extends State<FeedScreen> {
+  final FirestoreService _firestoreService = FirestoreService();
 
-  void _openCreatePostModal() {
+  // 1. This is the function we will pass to the Modal
+  void _handleCreatePost(Post post) async {
+    try {
+      await _firestoreService.addPost(post);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Post published successfully!')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error creating post: $e')),
+        );
+      }
+    }
+  }
+
+  void _showCreatePostModal() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) {
-        return Padding(
-          // Adjust bottom padding to accommodate the keyboard, preventing overflow
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom,
-          ),
-          // Assuming CreatePostModal is the name of your modal widget
-          child: CreatePostModal(onPostCreated: _addNewPost),
-        );
-      },
-    );
-  }
-
-  void _addNewPost(Post newPost) {
-    // Add the new post to the beginning of the list (most recent first)
-    setState(() {
-      _posts.insert(0, newPost);
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          "Post published successfully!",
-          style: TextStyle(fontFamily: 'Exo2'),
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
         ),
-        duration: Duration(seconds: 2),
+        // 2. FIX: We pass the function here to satisfy the 'required' parameter
+        child: CreatePostModal(onPostCreated: _handleCreatePost),
       ),
     );
   }
@@ -56,72 +52,60 @@ class _PostScreenState extends State<PostScreen> {
     return Scaffold(
       backgroundColor: kLightBackgroundColor,
       appBar: AppBar(
-        backgroundColor: kCardBackgroundColor,
-        elevation: 1, // Subtle shadow for header separation
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(CupertinoIcons.back, color: kDarkTextColor),
-          onPressed: () {
-            // Placeholder for back functionality
-            Navigator.pop(context);
-          },
-        ),
         title: const Text(
-          'Community Board',
+          'Service Exchange Feed',
           style: TextStyle(
-            color: kPrimaryBlue,
-            fontWeight: FontWeight.w800,
-            fontSize: 22,
-            fontFamily: 'Exo2',
+            color: kDarkTextColor,
+            fontWeight: FontWeight.bold,
           ),
         ),
+        backgroundColor: kLightBackgroundColor,
+        elevation: 0,
+        centerTitle: false,
+        actions: [
+          IconButton(
+            icon: const Icon(CupertinoIcons.search, color: kDarkTextColor),
+            onPressed: () {},
+          ),
+        ],
       ),
-
-      body:
-          _posts.isEmpty
-              ? const Center(
-                child: Text(
-                  "No posts yet. Be the first!",
-                  style: TextStyle(
-                    color: kMutedTextColor,
-                    fontSize: 18,
-                    fontFamily: 'Exo2',
-                  ),
-                ),
-              )
-              : ListView.builder(
-                padding: const EdgeInsets.all(20),
-                itemCount: _posts.length,
-                itemBuilder: (context, index) {
-                  return PostCard(post: _posts[index]);
-                },
+      body: StreamBuilder<List<Post>>(
+        stream: _firestoreService.getPostsStream(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return const Center(
+              child: Text(
+                "No posts yet. Be the first!",
+                style: TextStyle(color: kMutedTextColor, fontSize: 16),
               ),
+            );
+          }
 
-      // Floating Action Button to create a new post
+          final posts = snapshot.data!;
+
+          return ListView.builder(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            itemCount: posts.length,
+            itemBuilder: (context, index) {
+              return PostCard(post: posts[index]);
+            },
+          );
+        },
+      ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openCreatePostModal, // 👈 Using the local modal function
+        onPressed: _showCreatePostModal,
+        icon: const Icon(CupertinoIcons.add),
+        label: const Text('Post'),
         backgroundColor: kPrimaryBlue,
-        label: const Row(
-          children: [
-            Icon(
-              CupertinoIcons.plus_circle_fill,
-              color: Colors.white,
-              size: 24,
-            ),
-            SizedBox(width: 8),
-            Text(
-              "New Post",
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontFamily: 'Exo2',
-              ),
-            ),
-          ],
-        ),
+        foregroundColor: Colors.white,
       ),
-
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
 }

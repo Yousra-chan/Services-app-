@@ -110,16 +110,16 @@ class _RegisterPageState extends State<RegisterPage> {
     final authViewModel = Provider.of<AuthViewModel>(context, listen: false);
 
     try {
-      print('📱 Starting registration process...');
-      print('   Name: $_name');
-      print('   Email: $_email');
-      print('   Role: $_role');
-      print('   Phone: $_phone');
-      print('   Address: $_address');
-      print('   Location: $_latitude, $_longitude');
+      debugPrint('📱 Starting registration process...');
+      debugPrint('   Name: $_name');
+      debugPrint('   Email: $_email');
+      debugPrint('   Role: $_role');
+      debugPrint('   Phone: $_phone');
+      debugPrint('   Address: $_address');
+      debugPrint('   Location: $_latitude, $_longitude');
 
       // Use the real AuthViewModel signup method
-      await authViewModel.signup(
+      final user = await authViewModel.signup(
         name: _name,
         email: _email,
         password: _password,
@@ -132,15 +132,13 @@ class _RegisterPageState extends State<RegisterPage> {
 
       if (!mounted) return;
 
-      print('📱 Registration completed in UI');
+      debugPrint('📱 Registration completed in UI');
 
-      // Check if registration was successful
-      if (authViewModel.currentUser != null) {
+      // Check if registration was successful using the returned user
+      if (user != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              'Account Created for: ${authViewModel.currentUser!.name}!',
-            ),
+            content: Text('Account Created for: ${user.name}!'),
             backgroundColor: kPrimaryBlue,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
@@ -156,28 +154,28 @@ class _RegisterPageState extends State<RegisterPage> {
           (route) => false,
         );
       } else {
-        throw Exception('Registration failed - no user data');
+        // Show error from AuthViewModel
+        final errorMessage = authViewModel.error ?? 'Registration failed';
+        _showErrorSnackBar(errorMessage);
       }
     } catch (e) {
       if (!mounted) return;
 
-      String messageToDisplay;
-      if (e is Exception) {
-        messageToDisplay = e.toString().replaceFirst('Exception: ', '');
-      } else {
-        messageToDisplay = 'An unexpected error occurred.';
-      }
-
-      print('❌ Registration error: $messageToDisplay');
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Registration Failed: $messageToDisplay'),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      // AuthViewModel already handles errors, so just show the error state
+      final errorMessage =
+          authViewModel.error ?? 'An unexpected error occurred';
+      _showErrorSnackBar(errorMessage);
     }
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Registration Failed: $message'),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   Widget _buildTopBar(BuildContext context) {
@@ -192,26 +190,6 @@ class _RegisterPageState extends State<RegisterPage> {
         ),
         padding: EdgeInsets.zero,
         constraints: const BoxConstraints(),
-      ),
-    );
-  }
-
-  Widget _buildLogo() {
-    return Center(
-      child: Column(
-        children: [
-          Image.asset('assets/images/logo.png', width: 120, height: 120),
-          const SizedBox(height: 16),
-          const Text(
-            'Akhdem Li',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              fontFamily: kAppFont,
-              color: kDarkTextColor,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -232,10 +210,9 @@ class _RegisterPageState extends State<RegisterPage> {
       statusIcon = Icons.info_outline;
     }
 
-    String displayCoordinates =
-        _currentPosition != null
-            ? 'Lat: ${_currentPosition!.latitude.toStringAsFixed(6)}, Lon: ${_currentPosition!.longitude.toStringAsFixed(6)}'
-            : _locationMessage;
+    String displayCoordinates = _currentPosition != null
+        ? 'Lat: ${_currentPosition!.latitude.toStringAsFixed(6)}, Lon: ${_currentPosition!.longitude.toStringAsFixed(6)}'
+        : _locationMessage;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -409,20 +386,17 @@ class _RegisterPageState extends State<RegisterPage> {
                           children: [
                             // Name Field
                             TextFormField(
-                              decoration: buildAestheticInputDecoration(
-                                'Full Name',
-                              ),
+                              decoration:
+                                  buildAestheticInputDecoration('Full Name'),
                               keyboardType: TextInputType.name,
                               textCapitalization: TextCapitalization.words,
                               style: const TextStyle(
                                 fontFamily: kAppFont,
                                 color: kDarkTextColor,
                               ),
-                              validator:
-                                  (value) =>
-                                      value!.isEmpty
-                                          ? 'Please enter your name'
-                                          : null,
+                              validator: (value) => value!.isEmpty
+                                  ? 'Please enter your name'
+                                  : null,
                               onSaved: (value) => _name = value!,
                             ),
                             const SizedBox(height: 16),
@@ -430,37 +404,32 @@ class _RegisterPageState extends State<RegisterPage> {
                             // Email Field
                             TextFormField(
                               decoration: buildAestheticInputDecoration(
-                                'Email Address',
-                              ),
+                                  'Email Address'),
                               keyboardType: TextInputType.emailAddress,
                               style: const TextStyle(
                                 fontFamily: kAppFont,
                                 color: kDarkTextColor,
                               ),
-                              validator:
-                                  (value) =>
-                                      value!.isEmpty || !value.contains('@')
-                                          ? 'Please enter a valid email address'
-                                          : null,
+                              validator: (value) =>
+                                  value!.isEmpty || !value.contains('@')
+                                      ? 'Please enter a valid email address'
+                                      : null,
                               onSaved: (value) => _email = value!,
                             ),
                             const SizedBox(height: 16),
 
                             // Phone Field
                             TextFormField(
-                              decoration: buildAestheticInputDecoration(
-                                'Phone Number',
-                              ),
+                              decoration:
+                                  buildAestheticInputDecoration('Phone Number'),
                               keyboardType: TextInputType.phone,
                               style: const TextStyle(
                                 fontFamily: kAppFont,
                                 color: kDarkTextColor,
                               ),
-                              validator:
-                                  (value) =>
-                                      value!.isEmpty
-                                          ? 'Please enter your phone number'
-                                          : null,
+                              validator: (value) => value!.isEmpty
+                                  ? 'Please enter your phone number'
+                                  : null,
                               onSaved: (value) => _phone = value!,
                             ),
                             const SizedBox(height: 16),
@@ -468,8 +437,7 @@ class _RegisterPageState extends State<RegisterPage> {
                             // Address Field
                             TextFormField(
                               decoration: buildAestheticInputDecoration(
-                                'Full Address (Street, City, Postal Code)',
-                              ),
+                                  'Full Address (Street, City, Postal Code)'),
                               keyboardType: TextInputType.streetAddress,
                               maxLines: 2,
                               textCapitalization: TextCapitalization.sentences,
@@ -477,11 +445,10 @@ class _RegisterPageState extends State<RegisterPage> {
                                 fontFamily: kAppFont,
                                 color: kDarkTextColor,
                               ),
-                              validator:
-                                  (value) =>
-                                      value!.isEmpty && _latitude == null
-                                          ? 'Please enter your address or get your GPS location'
-                                          : null,
+                              validator: (value) => value!.isEmpty &&
+                                      _latitude == null
+                                  ? 'Please enter your address or get your GPS location'
+                                  : null,
                               onSaved: (value) => _address = value!,
                             ),
                             const SizedBox(height: 16),
@@ -497,19 +464,16 @@ class _RegisterPageState extends State<RegisterPage> {
                             // Password Field
                             TextFormField(
                               controller: _passwordController,
-                              decoration: buildAestheticInputDecoration(
-                                'Password',
-                              ),
+                              decoration:
+                                  buildAestheticInputDecoration('Password'),
                               obscureText: true,
                               style: const TextStyle(
                                 fontFamily: kAppFont,
                                 color: kDarkTextColor,
                               ),
-                              validator:
-                                  (value) =>
-                                      value!.length < 6
-                                          ? 'Password must be at least 6 characters'
-                                          : null,
+                              validator: (value) => value!.length < 6
+                                  ? 'Password must be at least 6 characters'
+                                  : null,
                               onSaved: (value) => _password = value!,
                             ),
                             const SizedBox(height: 16),
@@ -517,8 +481,7 @@ class _RegisterPageState extends State<RegisterPage> {
                             // Confirm Password Field
                             TextFormField(
                               decoration: buildAestheticInputDecoration(
-                                'Confirm Password',
-                              ),
+                                  'Confirm Password'),
                               obscureText: true,
                               style: const TextStyle(
                                 fontFamily: kAppFont,

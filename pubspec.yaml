@@ -54,8 +54,7 @@ dependencies:
   firebase_messaging: ^14.7.9
 
   # Geospatial Firestore queries
-  geoflutterfire_plus: ^0.0.21   # ⬅️ 100% compatible Firestore 4.x
-
+  geoflutterfire_plus: ^0.0.21   
 dev_dependencies:
   flutter_test:
     sdk: flutter

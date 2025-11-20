@@ -1,66 +1,83 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../models/servicesmodel.dart';
+import 'package:myapp/models/ServicesModel.dart';
 
-class ServicesService {
+class ServiceService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final String _collectionName = 'services';
 
-  /// Create a new service
-  Future<void> createService(ServiceModel service) async {
-    final docRef = _firestore.collection('services').doc();
-    // Assign the generated Firestore ID to the model
-    service.id = docRef.id;
-    await docRef.set(service.toMap());
-  }
+  Future<Service?> createService({
+    required String providerId,
+    required String title,
+    required String description,
+    required String category,
+    required double price,
+    required String priceUnit,
+    required String location,
+    double? latitude,
+    double? longitude,
+    List<String> images = const [],
+    List<String> tags = const [],
+  }) async {
+    try {
+      final docRef = _firestore.collection(_collectionName).doc();
+      final service = Service(
+        id: docRef.id,
+        providerId: providerId,
+        title: title,
+        description: description,
+        category: category,
+        price: price,
+        priceUnit: priceUnit,
+        images: images,
+        location: location,
+        latitude: latitude,
+        longitude: longitude,
+        tags: tags,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
 
-  /// Update existing service
-  Future<void> updateService(ServiceModel service) async {
-    // Using service.id which must be set for updates
-    if (service.id == null || service.id!.isEmpty) {
-      throw Exception("Service ID is required for update.");
+      await docRef.set(service.toMap());
+      return service;
+    } catch (e) {
+      throw Exception('Failed to create service: $e');
     }
-    // Update only the map data, excluding the ID if toMap() includes it
-    await _firestore
-        .collection('services')
-        .doc(service.id)
-        .update(service.toMap());
   }
 
-  /// Delete a service
-  Future<void> deleteService(String serviceId) async {
-    await _firestore.collection('services').doc(serviceId).delete();
+  Future<List<Service>> getServicesByProvider(String providerId) async {
+    try {
+      final querySnapshot = await _firestore
+          .collection(_collectionName)
+          .where('providerId', isEqualTo: providerId)
+          .orderBy('createdAt', descending: true)
+          .get();
+
+      return querySnapshot.docs
+          .map((doc) => Service.fromMap(doc.data()))
+          .toList();
+    } catch (e) {
+      throw Exception('Failed to get services: $e');
+    }
   }
 
-  /// Fetch all services
-  Future<List<ServiceModel>> getAllServices() async {
-    final snapshot = await _firestore.collection('services').get();
-    return snapshot.docs
-        .map((doc) => ServiceModel.fromMap(doc.data(), doc.id))
-        .toList();
+  Future<bool> updateService(Service service) async {
+    try {
+      await _firestore
+          .collection(_collectionName)
+          .doc(service.id)
+          .update(service.toMap());
+      return true;
+    } catch (e) {
+      throw Exception('Failed to update service: $e');
+    }
   }
 
-  /// Fetch services by category
-  Future<List<ServiceModel>> getServicesByCategory(String category) async {
-    final snapshot =
-        await _firestore
-            .collection('services')
-            .where('category', isEqualTo: category)
-            .get();
-
-    return snapshot.docs
-        .map((doc) => ServiceModel.fromMap(doc.data(), doc.id))
-        .toList();
-  }
-
-  /// Fetch services offered by a specific provider
-  Future<List<ServiceModel>> getServicesByProvider(String providerId) async {
-    final snapshot =
-        await _firestore
-            .collection('services')
-            .where('providerId', isEqualTo: providerId)
-            .get();
-
-    return snapshot.docs
-        .map((doc) => ServiceModel.fromMap(doc.data(), doc.id))
-        .toList();
+  Future<bool> deleteService(String serviceId) async {
+    try {
+      await _firestore.collection(_collectionName).doc(serviceId).delete();
+      return true;
+    } catch (e) {
+      throw Exception('Failed to delete service: $e');
+    }
   }
 }

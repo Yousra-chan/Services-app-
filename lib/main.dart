@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:myapp/ViewModel/auth_view_model.dart';
 import 'package:myapp/ViewModel/chat_view_model.dart';
+import 'package:myapp/ViewModel/unread_message_view_model.dart';
 import 'package:myapp/models/UserModel.dart';
 import 'package:myapp/screens/auth/login/login_screen.dart';
 import 'package:myapp/screens/navigator_bottom.dart';
@@ -10,6 +11,9 @@ import 'package:myapp/screens/onboarding/onboarding_screen.dart';
 import 'package:myapp/services/notification_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
+
+// Global navigator key for notification navigation
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,24 +23,39 @@ Future<void> main() async {
     await Firebase.initializeApp();
 
     // 2. Setup Firebase Cloud Messaging handlers
-    FirebaseMessaging.onBackgroundMessage(
-      NotificationService.firebaseMessagingBackgroundHandler,
-    );
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
     // 3. Initialize local notification service
-    await NotificationService().init();
+    await NotificationService.initialize();
 
     runApp(const MyApp());
   } catch (error) {
     // Catch errors during core Firebase/Notification setup
     debugPrint('Fatal initialization error: $error');
     runApp(
-      const ErrorApp(
-        initializationError:
-            'Failed to initialize Firebase or Notification Services.',
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => AuthViewModel()),
+          ChangeNotifierProvider(create: (_) => UnreadMessagesViewModel()),
+        ],
+        child: const MyApp(),
       ),
     );
   }
+}
+
+// Background message handler for FCM
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+  print("Handling a background message: ${message.messageId}");
+
+  // Show notification even when app is in background
+  await NotificationService.showNotification(
+    title: message.notification?.title ?? 'New Notification',
+    body: message.notification?.body ?? '',
+    payload: message.data['chatId'] ?? '',
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -46,12 +65,12 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(
-          create: (context) => AuthViewModel(),
-        ),
+        ChangeNotifierProvider(create: (context) => AuthViewModel()),
+        ChangeNotifierProvider(create: (context) => UnreadMessagesViewModel()),
       ],
       child: MaterialApp(
         title: 'Akhdem-Li',
+        navigatorKey: navigatorKey, // Add this for notification navigation
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
           useMaterial3: true,
@@ -60,44 +79,9 @@ class MyApp extends StatelessWidget {
         routes: {
           '/home': (context) => const NavigatorBottom(),
           '/login': (context) => const LoginScreen(),
+          '/onboarding': (context) => const OnboardingScreen(),
         },
         home: const AuthWrapper(),
-      ),
-    );
-  }
-}
-
-class ErrorApp extends StatelessWidget {
-  final String initializationError;
-  const ErrorApp({super.key, required this.initializationError});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      home: Scaffold(
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.warning_amber_rounded,
-                size: 64,
-                color: Colors.amber.shade700,
-              ),
-              const SizedBox(height: 20),
-              const Text(
-                'Critical Startup Error',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                initializationError,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 14, color: Colors.grey),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -118,6 +102,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
   void initState() {
     super.initState();
     _checkOnboardingStatus();
+    _setupNotificationInteractions();
   }
 
   Future<void> _checkOnboardingStatus() async {
@@ -140,6 +125,28 @@ class _AuthWrapperState extends State<AuthWrapper> {
           _isCheckingOnboarding = false;
         });
       }
+    }
+  }
+
+  void _setupNotificationInteractions() {
+    // Handle when app is opened from terminated state via notification
+    NotificationService.handleInitialMessage();
+
+    // Handle when app is in background and notification is clicked
+    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+      print('App opened from background via notification');
+      _handleNotificationNavigation(message.data);
+    });
+  }
+
+  void _handleNotificationNavigation(Map<String, dynamic> data) {
+    final chatId = data['chatId'];
+    final type = data['type'];
+
+    if (chatId != null && type == 'message') {
+      // Navigate to chat screen when notification is clicked
+      navigatorKey.currentState?.pushNamed('/home');
+      // You might want to add additional navigation to specific chat
     }
   }
 
@@ -186,8 +193,9 @@ class _AuthWrapperState extends State<AuthWrapper> {
       providers: [
         ChangeNotifierProvider<ChatViewModel>(
           create: (context) => ChatViewModel(userId: user.uid),
-          lazy: false, // Initialize immediately
+          lazy: false,
         ),
+        // Add other providers as needed
       ],
       child: const NavigatorBottom(),
     );
@@ -195,15 +203,22 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
   Widget _buildLoadingScreen(String message) {
     return Scaffold(
+      backgroundColor: Colors.white,
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const CircularProgressIndicator(),
+            const CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+            ),
             const SizedBox(height: 20),
             Text(
               message,
-              style: const TextStyle(fontSize: 16, color: Colors.grey),
+              style: const TextStyle(
+                fontSize: 16,
+                color: Colors.grey,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ],
         ),
@@ -213,50 +228,66 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
   Widget _buildErrorScreen(String errorMessage) {
     return Scaffold(
+      backgroundColor: Colors.white,
       body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(
-              Icons.error_outline,
-              size: 64,
-              color: Colors.red,
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Authentication Error',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 10),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 40.0),
-              child: Text(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.error_outline,
+                size: 64,
+                color: Colors.red.shade400,
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Authentication Error',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
                 errorMessage,
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.grey),
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey,
+                ),
               ),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () {
-                // Clear error and retry
-                final authViewModel =
-                    Provider.of<AuthViewModel>(context, listen: false);
-                authViewModel.clearError();
-              },
-              child: const Text('Retry'),
-            ),
-            const SizedBox(height: 10),
-            TextButton(
-              onPressed: () {
-                // Go to login screen
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (context) => const LoginScreen()),
-                );
-              },
-              child: const Text('Go to Login'),
-            ),
-          ],
+              const SizedBox(height: 30),
+              ElevatedButton(
+                onPressed: () {
+                  final authViewModel =
+                      Provider.of<AuthViewModel>(context, listen: false);
+                  authViewModel.clearError();
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                ),
+                child: const Text('Retry Connection'),
+              ),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pushReplacement(
+                    MaterialPageRoute(
+                        builder: (context) => const LoginScreen()),
+                  );
+                },
+                child: const Text(
+                  'Go to Login',
+                  style: TextStyle(color: Colors.blue),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

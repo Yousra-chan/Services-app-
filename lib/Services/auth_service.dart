@@ -155,8 +155,8 @@ class AuthService {
         print('User saved to Firestore: ${userModel.uid}');
 
         user.sendEmailVerification().catchError(
-          (e) => print('Could not send verification email: $e'),
-        );
+              (e) => print('Could not send verification email: $e'),
+            );
 
         await _saveFCMToken(user.uid);
         return userModel;
@@ -355,7 +355,6 @@ class AuthService {
       }
 
       await FirebaseMessaging.instance.deleteToken();
-      await notificationService.deleteAllNotifications();
 
       await _googleSignIn.signOut();
       await _auth.signOut();

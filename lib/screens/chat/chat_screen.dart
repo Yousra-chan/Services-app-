@@ -216,6 +216,91 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     super.dispose();
   }
 
+  void _createNewChatWithProvider(BuildContext context,
+      ChatViewModel chatViewModel, String providerId, String providerName) {
+    // Get current user ID
+    final currentUserId = widget.userId;
+
+    // Prevent self-chatting
+    if (currentUserId == providerId) {
+      _showErrorDialog(context, 'Action non autorisée',
+          'Vous ne pouvez pas créer une discussion avec vous-même.');
+      return;
+    }
+
+    print('💬 Creating chat with provider: $providerId ($providerName)');
+
+    // Store context in a variable before async operation
+    final scaffoldContext = context;
+
+    chatViewModel
+        .createChat(
+      clientId: currentUserId,
+      providerId: providerId,
+    )
+        .then((chatId) {
+      if (chatId != null) {
+        print('✅ Chat created successfully: $chatId');
+
+        // Use the stored context with a mounted check
+        if (scaffoldContext.mounted) {
+          ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+            SnackBar(
+              content: Text('Discussion créée avec $providerName!'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+
+          // Close the provider selection modal
+          Navigator.pop(scaffoldContext);
+        }
+
+        // Refresh the chat list
+        if (mounted) {
+          setState(() {});
+        }
+      } else {
+        print('❌ Failed to create chat');
+        if (scaffoldContext.mounted) {
+          ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+            const SnackBar(
+              content: Text('Erreur lors de la création de la discussion'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }).catchError((error) {
+      print('❌ Error creating chat: $error');
+      if (scaffoldContext.mounted) {
+        ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+          SnackBar(
+            content: Text('Erreur: ${error.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    });
+  }
+
+  // Helper method to show error dialog
+  void _showErrorDialog(BuildContext context, String title, String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
@@ -231,13 +316,13 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       create: (context) => ChatViewModel(userId: widget.userId),
       child: Consumer<ChatViewModel>(
         builder: (context, chatViewModel, child) {
-          return _buildChatScreen(chatViewModel);
+          return _buildChatScreen(context, chatViewModel); // Added context
         },
       ),
     );
   }
 
-  Widget _buildChatScreen(ChatViewModel chatViewModel) {
+  Widget _buildChatScreen(BuildContext context, ChatViewModel chatViewModel) {
     return Scaffold(
       backgroundColor: kLightGreyBlue,
       appBar: AppBar(
@@ -288,6 +373,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                     scrollDirection: Axis.horizontal,
                     itemCount: contacts.length + 1, // +1 for search icon
                     padding: const EdgeInsets.symmetric(horizontal: 10),
+                    // Look for this existing code and replace the entire itemBuilder:
                     itemBuilder: (context, index) {
                       if (index == 0) {
                         // Search icon
@@ -320,7 +406,10 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            buildAvatar(false, contact['imageUrl']!),
+                            buildAvatar(
+                                false,
+                                contact[
+                                    'imageUrl']!), // ← This is the problematic line
                             Padding(
                               padding: const EdgeInsets.only(top: 4.0),
                               child: SizedBox(
@@ -349,6 +438,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
           const SizedBox(height: 15),
 
           // Liste des discussions
+          // In chat_screen.dart - Fix the chat list builder
           Expanded(
             child: StreamBuilder<List<ChatModel>>(
               stream: chatViewModel.userChatsStream,
@@ -362,6 +452,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                 }
 
                 if (snapshot.hasError) {
+                  print('Chat list error: ${snapshot.error}');
                   return Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -370,12 +461,18 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                             color: Colors.red, size: 50),
                         const SizedBox(height: 10),
                         Text('Erreur: ${snapshot.error}'),
+                        const SizedBox(height: 20),
+                        ElevatedButton(
+                          onPressed: () => setState(() {}),
+                          child: const Text('Réessayer'),
+                        ),
                       ],
                     ),
                   );
                 }
 
                 final chats = snapshot.data ?? [];
+                print('💬 Loaded ${chats.length} chats');
 
                 if (chats.isEmpty) {
                   return Center(
@@ -388,7 +485,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                           size: 50,
                         ),
                         const SizedBox(height: 10),
-                        Text(
+                        const Text(
                           'Aucune discussion',
                           style: TextStyle(
                             color: kMutedTextColor,
@@ -416,8 +513,15 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                       const SizedBox(height: 2),
                   itemBuilder: (context, index) {
                     final chat = chats[index];
-                    final contactName =
-                        chat.getOtherParticipantName(widget.userId);
+
+                    // Safe way to get contact name
+                    String contactName;
+                    try {
+                      contactName = chat.getOtherParticipantName(widget.userId);
+                    } catch (e) {
+                      print('❌ Error getting participant name: $e');
+                      contactName = 'Unknown User';
+                    }
 
                     return AnimatedChatListItem(
                       index: index,
@@ -468,115 +572,269 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   }
 
   // Extract unique contacts from chats
+
   List<Map<String, String>> _extractContactsFromChats(
       List<ChatModel> chats, String currentUserId) {
     final contacts = <String, Map<String, String>>{};
 
     for (final chat in chats) {
-      final otherUserId =
-          chat.clientId == currentUserId ? chat.providerId : chat.clientId;
-      final contactName = chat.getOtherParticipantName(currentUserId);
+      try {
+        final otherUserId = chat.getOtherParticipantId(currentUserId);
+        final contactName = chat.getOtherParticipantName(currentUserId);
 
-      if (!contacts.containsKey(otherUserId)) {
-        contacts[otherUserId] = {
-          'id': otherUserId,
-          'name': contactName,
-          'imageUrl': '', // You can add profile image URL here if available
-        };
+        // Get profile image URL from participantNames or use default
+        final imageUrl = chat.participantNames[otherUserId] != null
+            ? '' // You can add actual image URL logic here if available
+            : '';
+
+        if (!contacts.containsKey(otherUserId)) {
+          contacts[otherUserId] = {
+            'id': otherUserId,
+            'name': contactName,
+            'imageUrl': imageUrl,
+          };
+        }
+      } catch (e) {
+        print('❌ Error extracting contact from chat ${chat.chatId}: $e');
+        // Continue with next chat instead of breaking
+        continue;
       }
     }
 
     return contacts.values.toList();
   }
 
+// In chat_screen.dart - Fix the _showProviderSelection method
   void _showProviderSelection(
       BuildContext context, ChatViewModel chatViewModel) {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (context) {
-        return FutureBuilder<List<Map<String, dynamic>>>(
-          future: chatViewModel.getAvailableProviders(),
-          builder: (context, snapshot) {
-            return Container(
-              padding: const EdgeInsets.all(16),
-              height: 400,
-              child: Column(
-                children: [
-                  Text(
-                    'Choisir un prestataire',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: kPrimaryBlue,
+        return Container(
+          height: MediaQuery.of(context).size.height * 0.8,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(20),
+              topRight: Radius.circular(20),
+            ),
+          ),
+          child: Column(
+            children: [
+              // Header
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(20),
+                    topRight: Radius.circular(20),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 10,
+                      offset: const Offset(0, 2),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  Expanded(
-                    child: snapshot.connectionState == ConnectionState.waiting
-                        ? const Center(child: CircularProgressIndicator())
-                        : snapshot.hasError
-                            ? const Center(child: Text('Erreur de chargement'))
-                            : snapshot.data!.isEmpty
-                                ? const Center(
-                                    child: Text('Aucun prestataire disponible'))
-                                : ListView.builder(
-                                    itemCount: snapshot.data!.length,
-                                    itemBuilder: (context, index) {
-                                      final provider = snapshot.data![index];
-                                      return ListTile(
-                                        leading: CircleAvatar(
-                                          backgroundColor: kLightGreyBlue,
-                                          child: Icon(
-                                              CupertinoIcons.person_fill,
-                                              color: kPrimaryBlue),
-                                        ),
-                                        title: Text(provider['name']),
-                                        subtitle: Text(provider['email']),
-                                        onTap: () {
-                                          Navigator.pop(context);
-                                          _createNewChatWithProvider(context,
-                                              chatViewModel, provider['id']);
-                                        },
-                                      );
-                                    },
-                                  ),
-                  ),
-                ],
+                  ],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Choisir un prestataire',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: kPrimaryBlue,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
               ),
-            );
-          },
+
+              Expanded(
+                child: FutureBuilder<List<Map<String, dynamic>>>(
+                  future: chatViewModel.getAvailableProviders(),
+                  builder: (context, snapshot) {
+                    print(
+                        '🔍 Provider snapshot state: ${snapshot.connectionState}');
+                    print('🔍 Provider snapshot has data: ${snapshot.hasData}');
+                    print(
+                        '🔍 Provider snapshot has error: ${snapshot.hasError}');
+
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            CircularProgressIndicator(),
+                            SizedBox(height: 16),
+                            Text('Chargement des prestataires...'),
+                          ],
+                        ),
+                      );
+                    }
+
+                    if (snapshot.hasError) {
+                      print('❌ Error loading providers: ${snapshot.error}');
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.error_outline,
+                                color: Colors.red, size: 50),
+                            const SizedBox(height: 16),
+                            const Text(
+                              'Erreur de chargement',
+                              style: TextStyle(
+                                  fontSize: 16, fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              '${snapshot.error}',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: Colors.grey),
+                            ),
+                            const SizedBox(height: 16),
+                            ElevatedButton(
+                              onPressed: () {
+                                Navigator.pop(context);
+                                _showProviderSelection(context, chatViewModel);
+                              },
+                              child: const Text('Réessayer'),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+
+                    final providers = snapshot.data ?? [];
+                    print('👥 Providers list length: ${providers.length}');
+
+                    if (providers.isEmpty) {
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.people_outline,
+                                size: 60, color: Colors.grey),
+                            const SizedBox(height: 16),
+                            const Text(
+                              'Aucun prestataire disponible',
+                              style: TextStyle(
+                                  fontSize: 16, fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Aucun prestataire n\'est inscrit sur la plateforme pour le moment.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: Colors.grey),
+                            ),
+                            const SizedBox(height: 20),
+                            ElevatedButton(
+                              onPressed: () {
+                                // Option to invite providers or show help
+                                _showNoProvidersHelp(context);
+                              },
+                              child: const Text('Que faire ?'),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+
+                    return ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: providers.length,
+                      itemBuilder: (context, index) {
+                        final provider = providers[index];
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          elevation: 2,
+                          child: ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: kPrimaryBlue,
+                              child: provider['photoUrl']?.isNotEmpty == true
+                                  ? ClipOval(
+                                      child: Image.network(
+                                        provider['photoUrl']!,
+                                        width: 40,
+                                        height: 40,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    )
+                                  : Text(
+                                      provider['name']![0].toUpperCase(),
+                                      style:
+                                          const TextStyle(color: Colors.white),
+                                    ),
+                            ),
+                            title: Text(
+                              provider['name'] ?? 'Unknown',
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            subtitle: Text(provider['email'] ?? ''),
+                            trailing:
+                                const Icon(Icons.arrow_forward_ios, size: 16),
+                            onTap: () {
+                              Navigator.pop(context);
+                              _createNewChatWithProvider(
+                                  context,
+                                  chatViewModel,
+                                  provider['id']!,
+                                  provider['name'] ?? 'Prestataire');
+                            },
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
         );
       },
     );
   }
 
-  void _createNewChat(BuildContext context, ChatViewModel chatViewModel) {
-    _showProviderSelection(context, chatViewModel);
+  void _showNoProvidersHelp(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Aucun prestataire disponible'),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Cela peut être dû à:'),
+            SizedBox(height: 8),
+            Text('• Aucun prestataire inscrit'),
+            Text('• Problème de connexion'),
+            Text('• Données non chargées'),
+            SizedBox(height: 16),
+            Text('Veuillez réessayer plus tard.'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
-  void _createNewChatWithProvider(
-      BuildContext context, ChatViewModel chatViewModel, String providerId) {
-    chatViewModel
-        .createChat(
-      clientId: widget.userId,
-      providerId: providerId,
-    )
-        .then((chatId) {
-      if (chatId != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Discussion créée avec succès!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Erreur lors de la création'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    });
+  void _createNewChat(BuildContext context, ChatViewModel chatViewModel) {
+    _showProviderSelection(context, chatViewModel);
   }
 }

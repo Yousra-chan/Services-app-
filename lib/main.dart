@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -19,19 +20,28 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
+    print('🚀 Starting app initialization...');
+
     // 1. Initialize Firebase
     await Firebase.initializeApp();
+    print('✅ Firebase initialized successfully');
 
     // 2. Setup Firebase Cloud Messaging handlers
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+    print('✅ Background message handler set up');
 
     // 3. Initialize local notification service
     await NotificationService.initialize();
+    print('✅ Notification service initialized');
+
+    // 4. Setup FCM and get token
+    await setupFirebaseMessaging();
+    print('✅ Firebase Messaging setup complete');
 
     runApp(const MyApp());
   } catch (error) {
     // Catch errors during core Firebase/Notification setup
-    debugPrint('Fatal initialization error: $error');
+    debugPrint('❌ Fatal initialization error: $error');
     runApp(
       MultiProvider(
         providers: [
@@ -44,11 +54,71 @@ Future<void> main() async {
   }
 }
 
+// Setup Firebase Messaging
+// Setup Firebase Messaging
+Future<void> setupFirebaseMessaging() async {
+  FirebaseMessaging messaging = FirebaseMessaging.instance;
+
+  // Request notification permissions
+  try {
+    NotificationSettings settings = await messaging.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+      criticalAlert: false,
+    );
+
+    print('🔔 Notification permission: ${settings.authorizationStatus}');
+  } catch (e) {
+    print('❌ Permission error: $e');
+  }
+
+  // Get FCM token
+  try {
+    String? token = await messaging.getToken();
+    print('🔔 FCM Token: $token');
+
+    // FIX: Check if token is not null before saving
+    if (token != null) {
+      await saveTokenToFirestore(token);
+    } else {
+      print('⚠️ FCM Token is null');
+    }
+  } catch (e) {
+    print('❌ Token error: $e');
+  }
+
+  // Handle foreground messages
+  FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+    print('🔔 Received message in foreground');
+    print('🔔 Message title: ${message.notification?.title}');
+    print('🔔 Message body: ${message.notification?.body}');
+
+    // Show local notification
+    NotificationService.showNotification(
+      title: message.notification?.title ?? 'Akhdem Li',
+      body: message.notification?.body ?? 'You have a new notification',
+      payload: message.data['chatId'] ?? '',
+    );
+  });
+}
+
+// Save token to Firestore
+Future<void> saveTokenToFirestore(String token) async {
+  try {
+    // This will be used when we have a user logged in
+    print('✅ FCM Token ready to save: $token');
+    // We'll save it when user logs in, in the AuthViewModel
+  } catch (e) {
+    print('❌ Error saving FCM token: $e');
+  }
+}
+
 // Background message handler for FCM
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
-  print("Handling a background message: ${message.messageId}");
+  print("🔔 Handling a background message: ${message.messageId}");
 
   // Show notification even when app is in background
   await NotificationService.showNotification(
@@ -118,7 +188,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
         });
       }
     } catch (error) {
-      debugPrint('Error checking onboarding status: $error');
+      debugPrint('❌ Error checking onboarding status: $error');
       if (mounted) {
         setState(() {
           _hasSeenOnboarding = false; // Default to false on error
@@ -129,12 +199,14 @@ class _AuthWrapperState extends State<AuthWrapper> {
   }
 
   void _setupNotificationInteractions() {
+    print('🔔 Setting up notification interactions...');
+
     // Handle when app is opened from terminated state via notification
     NotificationService.handleInitialMessage();
 
     // Handle when app is in background and notification is clicked
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      print('App opened from background via notification');
+      print('🔔 App opened from background via notification');
       _handleNotificationNavigation(message.data);
     });
   }
@@ -142,6 +214,8 @@ class _AuthWrapperState extends State<AuthWrapper> {
   void _handleNotificationNavigation(Map<String, dynamic> data) {
     final chatId = data['chatId'];
     final type = data['type'];
+
+    print('🔔 Notification data: $data');
 
     if (chatId != null && type == 'message') {
       // Navigate to chat screen when notification is clicked
@@ -169,14 +243,18 @@ class _AuthWrapperState extends State<AuthWrapper> {
   }
 
   Widget _buildAuthState(AuthViewModel authViewModel) {
-    // If we're still loading and no user data, show loading
+    // If we're still loading the initial auth state, show loading
     if (authViewModel.isLoading && authViewModel.currentUser == null) {
       return _buildLoadingScreen('Checking user session...');
     }
 
-    // If there's an error and no user, show error screen
+    // If there's an error during initial auth check and no user, show error screen
     if (authViewModel.error != null && authViewModel.currentUser == null) {
-      return _buildErrorScreen(authViewModel.error!);
+      // Only show error if it's not related to ongoing operations
+      if (!authViewModel.error!.contains('Login failed') &&
+          !authViewModel.error!.contains('Sign up failed')) {
+        return _buildErrorScreen(authViewModel.error!);
+      }
     }
 
     // If user is authenticated, show main app
@@ -189,6 +267,9 @@ class _AuthWrapperState extends State<AuthWrapper> {
   }
 
   Widget _buildAuthenticatedApp(UserModel user) {
+    // Save FCM token when user is authenticated
+    _saveUserFCMToken(user.uid);
+
     return MultiProvider(
       providers: [
         ChangeNotifierProvider<ChatViewModel>(
@@ -199,6 +280,22 @@ class _AuthWrapperState extends State<AuthWrapper> {
       ],
       child: const NavigatorBottom(),
     );
+  }
+
+  Future<void> _saveUserFCMToken(String userId) async {
+    try {
+      FirebaseMessaging messaging = FirebaseMessaging.instance;
+      String? token = await messaging.getToken();
+
+      // Save to Firestore
+      await FirebaseFirestore.instance.collection('users').doc(userId).update({
+        'fcmToken': token,
+        'fcmTokenUpdatedAt': FieldValue.serverTimestamp(),
+      });
+      print('✅ FCM Token saved for user: $userId');
+    } catch (e) {
+      print('❌ Error saving user FCM token: $e');
+    }
   }
 
   Widget _buildLoadingScreen(String message) {

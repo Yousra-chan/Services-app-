@@ -17,7 +17,11 @@ class FirebaseService {
         .collection('categories')
         .where('isActive', isEqualTo: true)
         .snapshots()
-        .map((snapshot) => snapshot.docs
+        .handleError((error) {
+      print('❌ Error fetching categories: $error');
+      // Return empty list on error
+      return Stream.value(<QueryDocumentSnapshot<Map<String, dynamic>>>[]);
+    }).map((snapshot) => snapshot.docs
             .map((doc) => ServiceCategory.fromFirestore(doc))
             .toList());
   }
@@ -57,11 +61,13 @@ class FirebaseService {
         .collection('providers')
         .where('isActive', isEqualTo: true)
         .snapshots()
-        .map((snapshot) {
-      return snapshot.docs
-          .map((doc) => ServiceProvider.fromFirestore(doc))
-          .toList();
-    });
+        .handleError((error) {
+      print('❌ Error fetching all providers: $error');
+      // Return empty list on error
+      return Stream.value(<QueryDocumentSnapshot<Map<String, dynamic>>>[]);
+    }).map((snapshot) => snapshot.docs
+            .map((doc) => ServiceProvider.fromFirestore(doc))
+            .toList());
   }
 
   // Fetch popular providers from Firestore
@@ -72,7 +78,11 @@ class FirebaseService {
         .orderBy('rating', descending: true)
         .limit(10)
         .snapshots()
-        .map((snapshot) => snapshot.docs
+        .handleError((error) {
+      print('❌ Error fetching popular providers: $error');
+      // Return empty list on error
+      return Stream.value(<QueryDocumentSnapshot<Map<String, dynamic>>>[]);
+    }).map((snapshot) => snapshot.docs
             .map((doc) => ServiceProvider.fromFirestore(doc))
             .toList());
   }
@@ -87,7 +97,11 @@ class FirebaseService {
         .collection('providers')
         .where('searchKeywords', arrayContains: query.toLowerCase())
         .snapshots()
-        .map((snapshot) => snapshot.docs
+        .handleError((error) {
+      print('❌ Error searching providers: $error');
+
+      return searchProvidersAlternative(query);
+    }).map((snapshot) => snapshot.docs
             .map((doc) => ServiceProvider.fromFirestore(doc))
             .toList());
   }
@@ -98,7 +112,8 @@ class FirebaseService {
   }
 
   // NOTIFICATION METHODS - CLEANED AND FIXED
-  static Stream<List<NotificationItem>> getUserNotifications(String userId) {
+  static Stream<List<HomeNotificationItem>> getUserNotifications(
+      String userId) {
     return _firestore
         .collection('notifications')
         .where('userId', isEqualTo: userId)
@@ -109,7 +124,7 @@ class FirebaseService {
       return Stream.value([]);
     }).map((snapshot) {
       return snapshot.docs
-          .map((doc) => NotificationItem.fromFirestore(doc))
+          .map((doc) => HomeNotificationItem.fromFirestore(doc))
           .toList();
     });
   }
@@ -140,7 +155,7 @@ class FirebaseService {
     required String userId,
     required String title,
     required String message,
-    required NotificationType type,
+    required HomeNotificationType type,
     String? chatId,
     String? senderId,
     String? senderName,
@@ -165,7 +180,7 @@ class FirebaseService {
     }
   }
 
-  static String _notificationTypeToString(NotificationType type) {
+  static String _notificationTypeToString(HomeNotificationType type) {
     return type.toString().split('.').last;
   }
 }
@@ -312,12 +327,12 @@ class ServiceProvider {
   }
 }
 
-// COMPLETE NotificationItem class
-class NotificationItem {
+// COMPLETE HomeNotificationItem class (renamed to avoid conflicts)
+class HomeNotificationItem {
   final String id;
   final String title;
   final String message;
-  final NotificationType type;
+  final HomeNotificationType type;
   final String? chatId;
   final String? senderId;
   final String? senderName;
@@ -325,7 +340,7 @@ class NotificationItem {
   final bool isRead;
   final DateTime time;
 
-  NotificationItem({
+  HomeNotificationItem({
     required this.id,
     required this.title,
     required this.message,
@@ -338,9 +353,9 @@ class NotificationItem {
     required this.time,
   });
 
-  factory NotificationItem.fromFirestore(DocumentSnapshot doc) {
+  factory HomeNotificationItem.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
-    return NotificationItem(
+    return HomeNotificationItem(
       id: doc.id,
       title: data['title'] ?? '',
       message: data['message'] ?? '',
@@ -354,49 +369,49 @@ class NotificationItem {
     );
   }
 
-  static NotificationType _parseNotificationType(String? type) {
+  static HomeNotificationType _parseNotificationType(String? type) {
     switch (type) {
-      case 'NotificationType.message':
+      case 'HomeNotificationType.message':
       case 'message':
-        return NotificationType.message;
-      case 'NotificationType.booking':
+        return HomeNotificationType.message;
+      case 'HomeNotificationType.booking':
       case 'booking':
-        return NotificationType.booking;
-      case 'NotificationType.payment':
+        return HomeNotificationType.booking;
+      case 'HomeNotificationType.payment':
       case 'payment':
-        return NotificationType.payment;
-      case 'NotificationType.reminder':
+        return HomeNotificationType.payment;
+      case 'HomeNotificationType.reminder':
       case 'reminder':
-        return NotificationType.reminder;
-      case 'NotificationType.promotional':
+        return HomeNotificationType.reminder;
+      case 'HomeNotificationType.promotional':
       case 'promotional':
-        return NotificationType.promotional;
-      case 'NotificationType.rating':
+        return HomeNotificationType.promotional;
+      case 'HomeNotificationType.rating':
       case 'rating':
-        return NotificationType.rating;
-      case 'NotificationType.health':
+        return HomeNotificationType.rating;
+      case 'HomeNotificationType.health':
       case 'health':
-        return NotificationType.health;
+        return HomeNotificationType.health;
       default:
-        return NotificationType.message;
+        return HomeNotificationType.message;
     }
   }
 
   IconData get icon {
     switch (type) {
-      case NotificationType.booking:
+      case HomeNotificationType.booking:
         return CupertinoIcons.calendar;
-      case NotificationType.payment:
+      case HomeNotificationType.payment:
         return CupertinoIcons.money_dollar_circle_fill;
-      case NotificationType.reminder:
+      case HomeNotificationType.reminder:
         return CupertinoIcons.clock_fill;
-      case NotificationType.promotional:
+      case HomeNotificationType.promotional:
         return CupertinoIcons.sparkles;
-      case NotificationType.rating:
+      case HomeNotificationType.rating:
         return CupertinoIcons.star_fill;
-      case NotificationType.health:
+      case HomeNotificationType.health:
         return CupertinoIcons.heart_fill;
-      case NotificationType.message:
+      case HomeNotificationType.message:
       default:
         return CupertinoIcons.chat_bubble_fill;
     }
@@ -404,19 +419,19 @@ class NotificationItem {
 
   Color get iconColor {
     switch (type) {
-      case NotificationType.booking:
+      case HomeNotificationType.booking:
         return Colors.green;
-      case NotificationType.payment:
+      case HomeNotificationType.payment:
         return Colors.green;
-      case NotificationType.reminder:
+      case HomeNotificationType.reminder:
         return Colors.orange;
-      case NotificationType.promotional:
+      case HomeNotificationType.promotional:
         return Colors.purple;
-      case NotificationType.rating:
+      case HomeNotificationType.rating:
         return kRatingYellow;
-      case NotificationType.health:
+      case HomeNotificationType.health:
         return Colors.red;
-      case NotificationType.message:
+      case HomeNotificationType.message:
       default:
         return kPrimaryBlue;
     }
@@ -436,13 +451,13 @@ class NotificationItem {
     };
   }
 
-  static String _notificationTypeToString(NotificationType type) {
+  static String _notificationTypeToString(HomeNotificationType type) {
     return type.toString().split('.').last;
   }
 }
 
-// Fixed NotificationType enum
-enum NotificationType {
+// Fixed HomeNotificationType enum (renamed)
+enum HomeNotificationType {
   message,
   booking,
   payment,

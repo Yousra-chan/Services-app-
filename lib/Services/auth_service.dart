@@ -59,15 +59,24 @@ class AuthService {
   /// Fetches the latest FCM token and saves it to the user's Firestore document.
   Future<void> _saveFCMToken(String uid) async {
     try {
+      print('🔄 Getting FCM token for user: $uid');
       final token = await FirebaseMessaging.instance.getToken();
+      print('📱 FCM Token: $token');
+
       if (token != null) {
         await _firestore.collection('users').doc(uid).update({
           'fcmToken': token,
         });
+        print('✅ FCM token saved to Firestore for user: $uid');
+
+        // Verify it was saved
+        final doc = await _firestore.collection('users').doc(uid).get();
+        print('📋 Verified FCM token in Firestore: ${doc.data()?['fcmToken']}');
+      } else {
+        print('❌ FCM token is null - this is the problem!');
       }
     } catch (e) {
-      // Retained for critical background process warning
-      print('Warning: Error saving FCM token for $uid: $e');
+      print('❌ Error saving FCM token for $uid: $e');
     }
   }
   // -----------------------------
@@ -82,17 +91,26 @@ class AuthService {
     double? lon,
   }) async {
     try {
+      print('🔄 _saveUserToFirestore called for user: ${user.uid}');
       final docRef = _firestore.collection('users').doc(user.uid);
       final doc = await docRef.get();
 
+      print('📄 Firestore document exists: ${doc.exists}');
+
       if (doc.exists) {
-        return UserModel.fromMap(doc.data()!, doc.id);
+        print('ℹ️ User already exists in Firestore, returning existing data');
+        final existingUser = UserModel.fromMap(doc.data()!, doc.id);
+        print('📋 Existing user data: ${existingUser.toMap()}');
+        return existingUser;
       }
+
+      print('➕ Creating new user document in Firestore');
 
       // Create GeoPoint if both lat and lon are provided
       GeoPoint? location;
       if (lat != null && lon != null) {
         location = GeoPoint(lat, lon);
+        print('📍 Location set: $location');
       }
 
       final userDoc = UserModel(
@@ -107,11 +125,15 @@ class AuthService {
         address: address,
       );
 
+      print('💾 User data to save: ${userDoc.toMap()}');
+
       await docRef.set(userDoc.toMap());
+      print('✅ User successfully saved to Firestore: ${user.uid}');
+
       return userDoc;
     } catch (e) {
-      // Retained for critical database failure logging
-      print('Error saving user to Firestore: $e');
+      print('❌ CRITICAL ERROR saving user to Firestore: $e');
+      print('📋 Error details: ${e.toString()}');
       rethrow;
     }
   }
@@ -380,6 +402,34 @@ class AuthService {
       }
     } catch (e) {
       throw Exception('حدث خطأ غير متوقع: $e');
+    }
+  }
+}
+
+// Add this to your auth service or user management
+Future<void> setUserRole(String userId, String role) async {
+  try {
+    await FirebaseFirestore.instance.collection('users').doc(userId).update({
+      'role': role,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    print('✅ User $userId role set to: $role');
+  } catch (e) {
+    print('❌ Error setting user role: $e');
+  }
+}
+
+// Call this when users register or in your admin panel
+Future<void> initializeUserRoles() async {
+  // Get all users and set default roles
+  final users = await FirebaseFirestore.instance.collection('users').get();
+
+  for (final userDoc in users.docs) {
+    final userData = userDoc.data();
+    if (userData['role'] == null) {
+      // Set default role based on some logic
+      // For example, set first user as provider, others as clients
+      await setUserRole(userDoc.id, 'client');
     }
   }
 }

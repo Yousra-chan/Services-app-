@@ -32,15 +32,13 @@ class ChatViewModel extends ChangeNotifier {
     _initializeStream(newUserId);
   }
 
-  // Écouter les messages d'un chat
   Stream<List<MessageModel>> listenMessages(String chatId) {
     if (_currentUserId == null) {
-      throw Exception('ID utilisateur non défini');
+      throw Exception('User ID not defined');
     }
-    return _chatService.listenMessages(chatId, currentUserId: _currentUserId);
+    return _chatService.listenMessages(chatId, currentUserId: _currentUserId!);
   }
 
-  // Envoyer un message
   Future<bool> sendMessage(String chatId, MessageModel message) async {
     _setLoading(true);
     _setError(null);
@@ -49,14 +47,13 @@ class ChatViewModel extends ChangeNotifier {
       await _chatService.sendMessage(chatId, message);
       return true;
     } catch (e) {
-      _setError('Erreur lors de l\'envoi: $e');
+      _setError('Error sending message: $e');
       return false;
     } finally {
       _setLoading(false);
     }
   }
 
-  // Créer un nouveau chat
   Future<String?> createChat({
     required String clientId,
     required String providerId,
@@ -71,42 +68,39 @@ class ChatViewModel extends ChangeNotifier {
       );
       return chatId;
     } catch (e) {
-      _setError('Erreur création chat: $e');
+      _setError('Error creating chat: $e');
       return null;
     } finally {
       _setLoading(false);
     }
   }
 
-  // Récupérer les prestataires
   Future<List<Map<String, dynamic>>> getAvailableProviders() async {
     _setLoading(true);
     try {
       return await _chatService.getAvailableProviders();
     } catch (e) {
-      _setError('Erreur chargement prestataires: $e');
+      _setError('Error loading providers: $e');
       return [];
     } finally {
       _setLoading(false);
     }
   }
 
-  // Compteurs de messages non lus
   Stream<int> getUnreadCount(String chatId) {
     if (_currentUserId == null) {
-      throw Exception('ID utilisateur non défini');
+      throw Exception('User ID not defined');
     }
     return _chatService.getUnreadCount(chatId, _currentUserId!);
   }
 
   Stream<int> getTotalUnreadCount() {
     if (_currentUserId == null) {
-      throw Exception('ID utilisateur non défini');
+      throw Exception('User ID not defined');
     }
     return _chatService.getTotalUnreadCount(_currentUserId!);
   }
 
-  // Helpers
   void _setLoading(bool value) {
     _isLoading = value;
     notifyListeners();

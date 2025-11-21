@@ -4,8 +4,7 @@ class MessageModel {
   String? id;
   final String senderId;
   final String text;
-  final dynamic
-      timestamp; // Changed to dynamic to handle both DateTime and Timestamp
+  final Timestamp timestamp; // Changed back to Timestamp for consistency
   final String type;
   final bool isRead;
 
@@ -22,8 +21,7 @@ class MessageModel {
     return {
       'senderId': senderId,
       'text': text,
-      'timestamp':
-          timestamp is DateTime ? Timestamp.fromDate(timestamp) : timestamp,
+      'timestamp': timestamp,
       'type': type,
       'isRead': isRead,
     };
@@ -44,4 +42,7 @@ class MessageModel {
     final data = doc.data() as Map<String, dynamic>;
     return MessageModel.fromMap({...data, 'id': doc.id});
   }
+
+  // Helper method to convert to DateTime if needed
+  DateTime get timestampDate => timestamp.toDate();
 }

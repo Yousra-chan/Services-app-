@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/ChatModel.dart';
 import '../models/MessageModel.dart';
 
@@ -19,11 +20,18 @@ class ChatService {
 
   // === CRÉATION ET RÉCUPÉRATION DES CHATS ===
 
+// In chat_service.dart - Update createChat method to prevent self-chats
   Future<String?> createChat({
     required String clientId,
     required String providerId,
   }) async {
     try {
+      // Prevent self-chatting
+      if (clientId == providerId) {
+        throw Exception(
+            'Vous ne pouvez pas créer une discussion avec vous-même');
+      }
+
       final chatId = getCanonicalChatId(clientId, providerId);
       final docRef = _chatsRef.doc(chatId);
       final existingChat = await docRef.get();
@@ -222,25 +230,69 @@ class ChatService {
     });
   }
 
-  // === MÉTHODE MANQUANTE AJOUTÉE ===
-
+  // In chat_service.dart - Update getAvailableProviders method
   Future<List<Map<String, dynamic>>> getAvailableProviders() async {
     try {
-      final querySnapshot =
+      print('🔍 Fetching available providers...');
+
+      // Get current user ID
+      final currentUser = FirebaseAuth.instance.currentUser;
+      final currentUserId = currentUser?.uid;
+
+      if (currentUserId == null) {
+        throw Exception('User not authenticated');
+      }
+
+      // First try to get users with provider role
+      final providerQuery =
           await _usersRef.where('role', isEqualTo: 'provider').limit(20).get();
 
-      return querySnapshot.docs.map((doc) {
+      print('📊 Found ${providerQuery.docs.length} providers with role filter');
+
+      // Filter out current user and map to list
+      final providers = providerQuery.docs
+          .where((doc) => doc.id != currentUserId) // Exclude current user
+          .map((doc) {
         final data = doc.data();
         return {
           'id': doc.id,
-          'name': data['name'] ?? 'Prestataire',
+          'name': data['name'] ?? 'Provider',
           'email': data['email'] ?? '',
           'photoUrl': data['photoUrl'] ?? '',
           'role': data['role'] ?? 'provider',
         };
       }).toList();
+
+      if (providers.isNotEmpty) {
+        return providers;
+      }
+
+      // If no providers found, get all users and exclude current user
+      print('🔄 No providers found with role, fetching all users...');
+      final allUsers = await _usersRef.limit(20).get();
+
+      final potentialProviders = allUsers.docs
+          .where((doc) => doc.id != currentUserId) // Exclude current user
+          .where((doc) {
+        final data = doc.data();
+        return data['name']?.isNotEmpty == true ||
+            data['email']?.isNotEmpty == true;
+      }).map((doc) {
+        final data = doc.data();
+        return {
+          'id': doc.id,
+          'name': data['name'] ?? 'User ${doc.id.substring(0, 6)}',
+          'email': data['email'] ?? '',
+          'photoUrl': data['photoUrl'] ?? '',
+          'role': data['role'] ?? 'user',
+        };
+      }).toList();
+
+      print(
+          '👥 Found ${potentialProviders.length} potential providers (excluding self)');
+      return potentialProviders;
     } catch (e) {
-      print('Error getting providers: $e');
+      print('❌ Error getting providers: $e');
       return [];
     }
   }

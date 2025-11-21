@@ -1,15 +1,11 @@
 // screens/home/notifications_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:provider/provider.dart';
-import 'home_constants.dart'
-    hide NotificationItem, NotificationType, FirebaseService;
+import 'package:myapp/ViewModel/auth_view_model.dart' show AuthViewModel;
+import 'package:myapp/ViewModel/chat_view_model.dart' show ChatViewModel;
 import 'package:myapp/screens/chat/disscussion/disscussion_page.dart';
-import 'package:myapp/ViewModel/chat_view_model.dart';
-import 'package:myapp/ViewModel/auth_view_model.dart';
-import 'package:myapp/models/NotificationsModel.dart';
+import 'package:provider/provider.dart';
+import 'home_constants.dart';
 
 class NotificationsWindow extends StatefulWidget {
   const NotificationsWindow({super.key});
@@ -19,7 +15,7 @@ class NotificationsWindow extends StatefulWidget {
 }
 
 class _NotificationsWindowState extends State<NotificationsWindow> {
-  late Stream<List<NotificationItem>> _notificationsStream;
+  late Stream<List<HomeNotificationItem>> _notificationsStream;
   String? _currentUserId;
 
   @override
@@ -51,7 +47,8 @@ class _NotificationsWindowState extends State<NotificationsWindow> {
     FirebaseService.markNotificationAsRead(id);
   }
 
-  void _navigateToChat(BuildContext context, NotificationItem notification) {
+  void _navigateToChat(
+      BuildContext context, HomeNotificationItem notification) {
     if (notification.chatId != null && _currentUserId != null) {
       // Mark notification as read
       _markAsRead(notification.id);
@@ -136,7 +133,7 @@ class _NotificationsWindowState extends State<NotificationsWindow> {
 
             // Notifications List
             Expanded(
-              child: StreamBuilder<List<NotificationItem>>(
+              child: StreamBuilder<List<HomeNotificationItem>>(
                 stream: _notificationsStream,
                 builder: (context, snapshot) {
                   print('🔔 StreamBuilder state: ${snapshot.connectionState}');
@@ -176,10 +173,10 @@ class _NotificationsWindowState extends State<NotificationsWindow> {
   }
 
   Widget _buildNotificationCard(
-      NotificationItem notification, BuildContext context) {
+      HomeNotificationItem notification, BuildContext context) {
     return GestureDetector(
       onTap: () {
-        if (notification.type == NotificationType.message) {
+        if (notification.type == HomeNotificationType.message) {
           _navigateToChat(context, notification);
         } else {
           _markAsRead(notification.id);
@@ -288,7 +285,7 @@ class _NotificationsWindowState extends State<NotificationsWindow> {
                   const SizedBox(height: 8),
 
                   // Action Button for specific notification types
-                  if (notification.type == NotificationType.message &&
+                  if (notification.type == HomeNotificationType.message &&
                       notification.actionText.isNotEmpty)
                     SizedBox(
                       width: double.infinity,

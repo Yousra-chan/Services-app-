@@ -9,7 +9,7 @@ class ChatModel {
   final List<String> participants;
   final Map<String, String> participantNames;
   final Map<String, String> participantRoles;
-  final Map<String, dynamic> unreadCount; // Changed to dynamic
+  final Map<String, dynamic> unreadCount;
   final Timestamp createdAt;
   final String? lastMessageSender;
   final String? lastMessageType;
@@ -72,18 +72,15 @@ class ChatModel {
     return ChatModel.fromMap(data);
   }
 
-  // Helper method to get the other participant's ID
   String getOtherParticipantId(String currentUserId) {
     return participants.firstWhere((id) => id != currentUserId);
   }
 
-  // Helper method to get the other participant's name
   String getOtherParticipantName(String currentUserId) {
     final otherId = getOtherParticipantId(currentUserId);
     return participantNames[otherId] ?? 'Unknown User';
   }
 
-  // Helper method to get unread count for current user
   int getUnreadCountForUser(String userId) {
     final count = unreadCount[userId];
     if (count is int) return count;

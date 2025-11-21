@@ -26,13 +26,25 @@ class _HomePageState extends State<HomePage> {
 
   void _loadUserData() {
     final user = FirebaseService.currentUser;
-    if (user != null) {
+    if (user != null && user.uid.isNotEmpty) {
       FirebaseService.getUserData(user.uid).listen((userData) {
-        if (mounted) {
+        if (mounted && userData.exists) {
+          final data = userData.data() as Map<String, dynamic>?;
           setState(() {
-            _userName = userData['name'] ?? user.displayName ?? 'User';
+            _userName = data?['name'] ?? user.displayName ?? 'User';
           });
         }
+      }, onError: (error) {
+        print('❌ Error loading user data: $error');
+        if (mounted) {
+          setState(() {
+            _userName = 'User';
+          });
+        }
+      });
+    } else {
+      setState(() {
+        _userName = 'Guest';
       });
     }
   }

@@ -33,7 +33,6 @@ class ProviderModel {
     required this.services,
   });
 
-  // FIXED: Change to two required parameters to match usage
   factory ProviderModel.fromMap(Map<String, dynamic> map, String docId) {
     // Safely parse GeoPoint
     GeoPoint? geoPoint;
@@ -43,10 +42,9 @@ class ProviderModel {
 
     // Safely parse services list
     final servicesList = map['services'];
-    List<String> services =
-        (servicesList is List)
-            ? List<String>.from(servicesList.map((x) => x.toString()))
-            : [];
+    List<String> services = (servicesList is List)
+        ? List<String>.from(servicesList.map((x) => x.toString()))
+        : [];
 
     // Safely parse userRef - handle cases where it might not exist
     DocumentReference userRef;
@@ -57,8 +55,14 @@ class ProviderModel {
       userRef = FirebaseFirestore.instance.collection('users').doc(docId);
     }
 
+    // Safely parse subscriptionActive
+    bool subscriptionActive = false;
+    if (map['subscriptionActive'] != null) {
+      subscriptionActive = map['subscriptionActive'] == true;
+    }
+
     return ProviderModel(
-      uid: docId, // Now using the required docId parameter
+      uid: docId,
       name: map['name'] ?? '',
       profession: map['profession'] ?? '',
       description: map['description'] ?? '',
@@ -68,29 +72,10 @@ class ProviderModel {
       location: geoPoint,
       address: map['address'] ?? '',
       rating: (map['rating'] is num) ? (map['rating'] as num).toDouble() : 0.0,
-      subscriptionActive: map['subscriptionActive'] ?? false,
+      subscriptionActive: subscriptionActive,
       subscriptionExpires: map['subscriptionExpires'] as Timestamp?,
       userRef: userRef,
       services: services,
     );
-  }
-
-  // Convert the model to a Firestore map
-  Map<String, dynamic> toMap() {
-    return {
-      'name': name,
-      'profession': profession,
-      'description': description,
-      'phone': phone,
-      'whatsapp': whatsapp,
-      'photoUrl': photoUrl,
-      'location': location,
-      'address': address,
-      'rating': rating,
-      'subscriptionActive': subscriptionActive,
-      'subscriptionExpires': subscriptionExpires,
-      'userRef': userRef,
-      'services': services,
-    };
   }
 }

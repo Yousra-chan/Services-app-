@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:myapp/screens/auth/constants.dart';
 
 const Color kPrimaryBlue = Color(0xFF143EAE);
 const Color kLightBackgroundColor = Color(0xFFF0F4F8);
@@ -6,6 +7,8 @@ const Color kDarkTextColor = Color(0xFF1E293B);
 const Color kMutedTextColor = Color(0xFF64748B);
 const String kAppFont = 'Roboto';
 const double kHorizontalPadding = 24.0;
+const Color kBorderColor = Color(0xFFE0E0E0);
+const Color kInputFillColor = Color(0xFFE9ECEF); // Add this line
 
 InputDecoration buildInputDecoration(String label) {
   return InputDecoration(
@@ -73,19 +76,69 @@ class OrDivider extends StatelessWidget {
 }
 
 class SocialSignInRow extends StatelessWidget {
-  const SocialSignInRow({super.key});
+  final VoidCallback onGooglePressed;
+  final VoidCallback onApplePressed;
+  final bool isLoading;
+
+  const SocialSignInRow({
+    required this.onGooglePressed,
+    required this.onApplePressed,
+    required this.isLoading,
+    super.key,
+  });
+
   @override
   Widget build(BuildContext context) {
-    return const SizedBox.shrink();
+    return Row(
+      children: [
+        Expanded(
+          child: _buildSocialButton(
+            icon: Icons.g_translate, // Google icon
+            onPressed: onGooglePressed,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _buildSocialButton(
+            icon: Icons.apple,
+            onPressed: onApplePressed,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSocialButton({
+    required IconData icon,
+    required VoidCallback onPressed,
+  }) {
+    return InkWell(
+      onTap: isLoading ? null : onPressed,
+      child: Container(
+        height: 50,
+        decoration: BoxDecoration(
+          border: Border.all(color: kBorderColor),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(icon),
+      ),
+    );
   }
 }
 
 class SignInLink extends StatelessWidget {
   final VoidCallback onTap;
   const SignInLink({required this.onTap, super.key});
+
   @override
   Widget build(BuildContext context) {
-    return const SizedBox.shrink();
+    return GestureDetector(
+      onTap: onTap,
+      child: const Text(
+        'Already have an account? Sign in',
+        style: TextStyle(color: kPrimaryBlue),
+      ),
+    );
   }
 }
 

@@ -5,6 +5,7 @@ import 'package:myapp/screens/auth/constants.dart';
 import 'package:myapp/screens/auth/forget_password_screen.dart';
 import 'package:myapp/screens/auth/register/register_screen.dart';
 import 'package:myapp/ViewModel/auth_view_model.dart';
+import 'package:myapp/screens/navigator_bottom.dart';
 import 'package:provider/provider.dart';
 
 // --- Aesthetic Input Decoration Function ---
@@ -77,9 +78,15 @@ class _LoginScreenState extends State<LoginScreen> {
               duration: Duration(seconds: 2),
             ),
           );
-          // AuthWrapper will handle navigation automatically
+
+          // Navigate immediately to home
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (context) => const NavigatorBottom()),
+            (route) => false,
+          );
         } else {
-          // Show error message from AuthViewModel
+          // Show error message
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(authViewModel.error ?? 'Login failed'),

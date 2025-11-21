@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
+
 class Service {
   final String id;
   final String providerId;
@@ -61,6 +63,18 @@ class Service {
   }
 
   factory Service.fromMap(Map<String, dynamic> map) {
+    // Helper function to parse timestamps safely
+    DateTime parseTimestamp(dynamic timestamp) {
+      if (timestamp is Timestamp) {
+        return timestamp.toDate();
+      } else if (timestamp is int) {
+        return DateTime.fromMillisecondsSinceEpoch(timestamp);
+      } else if (timestamp is String) {
+        return DateTime.tryParse(timestamp) ?? DateTime.now();
+      }
+      return DateTime.now();
+    }
+
     return Service(
       id: map['id'] ?? '',
       providerId: map['providerId'] ?? '',
@@ -74,14 +88,10 @@ class Service {
       latitude: (map['latitude'] as num?)?.toDouble(),
       longitude: (map['longitude'] as num?)?.toDouble(),
       isActive: map['isActive'] ?? true,
-      createdAt: map['createdAt'] != null
-          ? DateTime.fromMillisecondsSinceEpoch(map['createdAt'])
-          : DateTime.now(),
-      updatedAt: map['updatedAt'] != null
-          ? DateTime.fromMillisecondsSinceEpoch(map['updatedAt'])
-          : DateTime.now(),
+      createdAt: parseTimestamp(map['createdAt']),
+      updatedAt: parseTimestamp(map['updatedAt']),
       rating: (map['rating'] as num?)?.toDouble() ?? 0.0,
-      totalReviews: map['totalReviews'] ?? 0,
+      totalReviews: (map['totalReviews'] is int) ? map['totalReviews'] : 0,
       tags: List<String>.from(map['tags'] ?? []),
     );
   }

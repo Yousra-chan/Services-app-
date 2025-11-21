@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:myapp/screens/posts/posts_constants.dart' show kOfferingColor;
 import 'package:provider/provider.dart';
 import 'package:myapp/models/ProviderModel.dart';

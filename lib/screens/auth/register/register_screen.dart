@@ -38,6 +38,44 @@ class _RegisterPageState extends State<RegisterPage> {
     super.dispose();
   }
 
+  Future<void> _signInWithGoogle() async {
+    final authViewModel = Provider.of<AuthViewModel>(context, listen: false);
+    try {
+      final user = await authViewModel.signInWithGoogle();
+      if (!mounted) return;
+
+      if (user != null) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const NavigatorBottom()),
+          (route) => false,
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      _showErrorSnackBar('Google sign-in failed: $e');
+    }
+  }
+
+  Future<void> _signInWithApple() async {
+    final authViewModel = Provider.of<AuthViewModel>(context, listen: false);
+    try {
+      final user = await authViewModel.signInWithApple();
+      if (!mounted) return;
+
+      if (user != null) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const NavigatorBottom()),
+          (route) => false,
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      _showErrorSnackBar('Apple sign-in failed: $e');
+    }
+  }
+
   /// Determine the current position of the device.
   Future<void> _determinePosition() async {
     setState(() {
@@ -106,19 +144,11 @@ class _RegisterPageState extends State<RegisterPage> {
 
     _formKey.currentState!.save();
 
-    // Get the real AuthViewModel from Provider
     final authViewModel = Provider.of<AuthViewModel>(context, listen: false);
 
     try {
       debugPrint('📱 Starting registration process...');
-      debugPrint('   Name: $_name');
-      debugPrint('   Email: $_email');
-      debugPrint('   Role: $_role');
-      debugPrint('   Phone: $_phone');
-      debugPrint('   Address: $_address');
-      debugPrint('   Location: $_latitude, $_longitude');
 
-      // Use the real AuthViewModel signup method
       final user = await authViewModel.signup(
         name: _name,
         email: _email,
@@ -132,10 +162,8 @@ class _RegisterPageState extends State<RegisterPage> {
 
       if (!mounted) return;
 
-      debugPrint('📱 Registration completed in UI');
-
-      // Check if registration was successful using the returned user
       if (user != null) {
+        // Show success message
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Account Created for: ${user.name}!'),
@@ -147,21 +175,19 @@ class _RegisterPageState extends State<RegisterPage> {
           ),
         );
 
-        // Navigate to home screen
+        // Navigate immediately to home
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (context) => const NavigatorBottom()),
           (route) => false,
         );
       } else {
-        // Show error from AuthViewModel
+        // Show error
         final errorMessage = authViewModel.error ?? 'Registration failed';
         _showErrorSnackBar(errorMessage);
       }
     } catch (e) {
       if (!mounted) return;
-
-      // AuthViewModel already handles errors, so just show the error state
       final errorMessage =
           authViewModel.error ?? 'An unexpected error occurred';
       _showErrorSnackBar(errorMessage);
@@ -513,7 +539,11 @@ class _RegisterPageState extends State<RegisterPage> {
                       const OrDivider(),
 
                       const SizedBox(height: 20),
-                      const SocialSignInRow(),
+                      SocialSignInRow(
+                        onGooglePressed: _signInWithGoogle,
+                        onApplePressed: _signInWithApple,
+                        isLoading: authViewModel.isLoading,
+                      ),
                     ],
                   ),
                 ),
@@ -538,4 +568,27 @@ class _RegisterPageState extends State<RegisterPage> {
       ),
     );
   }
+}
+
+InputDecoration buildAestheticInputDecoration(String label) {
+  return InputDecoration(
+    hintText: label,
+    hintStyle: const TextStyle(color: kMutedTextColor, fontFamily: kAppFont),
+    filled: true,
+    fillColor: kInputFillColor.withOpacity(0.5),
+    contentPadding:
+        const EdgeInsets.symmetric(vertical: 16.0, horizontal: 20.0),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide.none,
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide.none,
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: const BorderSide(color: kPrimaryBlue, width: 2),
+    ),
+  );
 }

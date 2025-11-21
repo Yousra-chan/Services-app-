@@ -1,18 +1,12 @@
-buildscript {
-    repositories {
-        google()
-        mavenCentral()
-    }
-
-    dependencies {
-        classpath("com.android.tools.build:gradle:8.7.2")
-        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.10")
-        classpath("com.google.gms:google-services:4.4.3")
-    }
-}
-
 plugins {
-    id("com.google.gms.google-services") version "4.4.3" apply false
+    // Flutter gère les versions automatiquement → ne rien ajouter ici
+    id("com.android.application") apply false
+    id("com.android.library") apply false
+    id("org.jetbrains.kotlin.android") apply false
+
+    // Firebase
+    id("dev.flutter.flutter-gradle-plugin") apply false
+    id("com.google.gms.google-services") version "4.4.2" apply false
 }
 
 allprojects {
@@ -22,11 +16,8 @@ allprojects {
     }
 }
 
-// Optional: adjust build directories if needed
-val newBuildDir: Directory =
-    rootProject.layout.buildDirectory
-        .dir("../../build")
-        .get()
+// Réorganisation du dossier build (standard Flutter)
+val newBuildDir: Directory = rootProject.layout.buildDirectory.dir("../../build").get()
 rootProject.layout.buildDirectory.value(newBuildDir)
 
 subprojects {

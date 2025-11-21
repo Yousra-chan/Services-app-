@@ -80,7 +80,6 @@ Widget buildDiscussionAppBar(
   );
 }
 
-// Builds a single message bubble using MessageModel
 Widget buildMessageBubble(MessageModel message, String currentUserId) {
   final bool isSent = message.senderId == currentUserId;
 
@@ -115,7 +114,8 @@ Widget buildMessageBubble(MessageModel message, String currentUserId) {
           ),
           const SizedBox(height: 4),
           Text(
-            DateFormat('HH:mm').format(message.timestamp.toDate()),
+            DateFormat('HH:mm')
+                .format(message.timestamp.toDate()), // Fixed timestamp access
             style: TextStyle(
               color:
                   isSent ? kLightTextColor.withOpacity(0.7) : kMutedTextColor,
@@ -129,7 +129,6 @@ Widget buildMessageBubble(MessageModel message, String currentUserId) {
   );
 }
 
-// Builds the date separator
 Widget buildDateSeparator(String date) {
   return Container(
     margin: const EdgeInsets.symmetric(vertical: 15),

@@ -156,7 +156,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
             child: _messages.isEmpty
                 ? const Center(
                     child: Text(
-                      'No messages yet',
+                      'Start the conversation...',
                       style: TextStyle(
                         color: kMutedTextColor,
                         fontFamily: 'Exo2',

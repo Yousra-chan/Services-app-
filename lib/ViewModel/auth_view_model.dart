@@ -57,8 +57,8 @@ class AuthViewModel with ChangeNotifier {
     required String role,
     required String phone,
     required String address,
-    double? lat, // Make these optional to match register page
-    double? lon,
+    double? lat, // Change from 'latitude'
+    double? lon, // Change from 'longitude'
   }) async {
     return _executeAuthOperation(() async {
       final userModel = await _authService.signup(
@@ -68,8 +68,8 @@ class AuthViewModel with ChangeNotifier {
         role: role,
         phone: phone,
         address: address,
-        lat: lat, // Pass the optional parameters
-        lon: lon,
+        lat: lat, // Changed
+        lon: lon, // Changed
       );
       _setUser(userModel);
       return userModel;

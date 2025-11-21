@@ -7,11 +7,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:myapp/screens/chat/disscussion/disscussion_page.dart';
 import 'package:myapp/ViewModel/chat_view_model.dart';
-import 'package:myapp/screens/home/home_constants.dart'
-    hide FirebaseService, NotificationType;
 import 'package:provider/provider.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:myapp/models/NotificationsModel.dart';
+import 'package:myapp/screens/home/home_constants.dart';
 
 // Navigation service for handling notification navigation
 class NavigationService {
@@ -36,10 +34,12 @@ class NavigationService {
             participants.firstWhere((id) => id != userId, orElse: () => '');
         final contactName = participantNames[otherUserId] ?? 'Unknown User';
 
-        // Navigate directly to DiscussionPage
+        // Navigate directly to DiscussionPage WITH CUSTOM ROUTE
         navigatorKey.currentState?.push(
-          MaterialPageRoute(
-            builder: (context) => ChangeNotifierProvider(
+          PageRouteBuilder(
+            // ← Use PageRouteBuilder instead of MaterialPageRoute
+            pageBuilder: (context, animation, secondaryAnimation) =>
+                ChangeNotifierProvider(
               create: (context) => ChatViewModel(userId: userId),
               child: DiscussionPage(
                 contactName: contactName,
@@ -49,6 +49,15 @@ class NavigationService {
                 chatViewModel: ChatViewModel(userId: userId),
               ),
             ),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
+              // Use a simple fade transition instead of Hero
+              return FadeTransition(
+                opacity: animation,
+                child: child,
+              );
+            },
+            transitionDuration: Duration(milliseconds: 300),
           ),
         );
       }
@@ -308,7 +317,7 @@ class NotificationService {
         message: messageText.length > 50
             ? '${messageText.substring(0, 50)}...'
             : messageText,
-        type: NotificationType.message,
+        type: HomeNotificationType.message,
         chatId: chatId,
         senderId: senderId,
         senderName: senderName,

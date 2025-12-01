@@ -16,3 +16,5 @@ const Color kLightTextColor = Color.fromARGB(255, 248, 249, 255);
 const Color kDangerColor = Color.fromARGB(255, 239, 83, 80);
 // Accent color
 const Color kAccentColor = Color.fromARGB(255, 255, 193, 7);
+const Color kSuccessColor = Color(0xFF16A34A);
+const Color kWarningColor = Color(0xFFD97706);

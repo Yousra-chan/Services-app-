@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:myapp/screens/chat/chat_screen.dart';
-import 'package:myapp/screens/home/home_screen.dart';
+import 'package:myapp/screens/home/home_screen/home_screen.dart'
+    hide AuthViewModel;
 import 'package:flutter/cupertino.dart';
 import 'package:myapp/screens/profile/profile_page_loader.dart';
 import 'package:myapp/screens/search/search_screen.dart';
@@ -18,7 +19,14 @@ class NavigatorBottom extends StatefulWidget {
 
 class _NavigatorBottomState extends State<NavigatorBottom> {
   int selectorIndex = 0;
-  final Color highlight = const Color.fromARGB(255, 28, 130, 213);
+
+  // Updated colors to match header gradient
+  final Color selectedColor =
+      const Color.fromARGB(255, 12, 94, 153); // kPrimaryBlue
+  final Color unselectedColor = const Color.fromARGB(255, 150, 180, 220);
+  final Color backgroundColor =
+      const Color.fromARGB(255, 248, 249, 255); // kLightBackgroundColor
+  final Color navBackgroundColor = const Color.fromARGB(255, 255, 255, 255);
 
   // Badge widget for unread messages
   Widget _buildMessageBadge(int count, Widget child) {
@@ -65,29 +73,51 @@ class _NavigatorBottomState extends State<NavigatorBottom> {
   }) {
     final bool selected = selectorIndex == index;
 
-    Icon icon;
-    if (selected) {
-      icon = Icon(filled, size: 28, color: highlight);
-    } else {
-      icon = Icon(outline, size: 24, color: Color.fromARGB(255, 7, 66, 115));
-    }
-
-    Widget iconWidget = AnimatedContainer(
-      duration: const Duration(milliseconds: 220),
-      padding: EdgeInsets.all(6),
+    Widget iconWidget = Container(
+      padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
+        gradient: selected
+            ? const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color.fromARGB(255, 12, 94, 153),
+                  Color(0xFF4A6FDC),
+                  Color(0xFF667EEA),
+                ],
+              )
+            : null,
+        color: selected ? null : Colors.transparent,
         shape: BoxShape.circle,
-        boxShadow: [
-          if (selected)
-            BoxShadow(
-              color: highlight.withOpacity(0.35),
-              blurRadius: 12,
-              spreadRadius: 1,
-              offset: const Offset(0, 4),
-            ),
-        ],
+        boxShadow: selected
+            ? [
+                BoxShadow(
+                  color: selectedColor.withOpacity(0.3),
+                  blurRadius: 8,
+                  spreadRadius: 1,
+                  offset: const Offset(0, 2),
+                ),
+              ]
+            : null,
       ),
-      child: icon,
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        transitionBuilder: (child, animation) {
+          return ScaleTransition(
+            scale: animation,
+            child: FadeTransition(
+              opacity: animation,
+              child: child,
+            ),
+          );
+        },
+        child: Icon(
+          selected ? filled : outline,
+          key: ValueKey<bool>(selected),
+          size: selected ? 26 : 24,
+          color: selected ? Colors.white : unselectedColor,
+        ),
+      ),
     );
 
     // Add badge for chat icon (index 3)
@@ -98,6 +128,38 @@ class _NavigatorBottomState extends State<NavigatorBottom> {
     return iconWidget;
   }
 
+  // New animated label
+  Widget _buildLabel(int index, String label) {
+    final bool selected = selectorIndex == index;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        gradient: selected
+            ? const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color.fromARGB(255, 12, 94, 153),
+                  Color(0xFF4A6FDC),
+                ],
+              )
+            : null,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: AnimatedDefaultTextStyle(
+        duration: const Duration(milliseconds: 300),
+        style: TextStyle(
+          fontSize: selected ? 12 : 11,
+          fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+          color: selected ? Colors.white : unselectedColor,
+        ),
+        child: Text(label),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final authViewModel = Provider.of<AuthViewModel>(context);
@@ -105,13 +167,17 @@ class _NavigatorBottomState extends State<NavigatorBottom> {
     // Vérifier si l'utilisateur est connecté
     if (authViewModel.currentUser == null) {
       return Scaffold(
+        backgroundColor: backgroundColor,
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 20),
-              Text('Chargement du profil utilisateur...'),
+              CircularProgressIndicator(color: selectedColor),
+              const SizedBox(height: 20),
+              Text(
+                'Chargement du profil utilisateur...',
+                style: TextStyle(color: unselectedColor),
+              ),
             ],
           ),
         ),
@@ -130,6 +196,7 @@ class _NavigatorBottomState extends State<NavigatorBottom> {
               final unreadCount = snapshot.data ?? 0;
 
               return Scaffold(
+                backgroundColor: backgroundColor,
                 body: IndexedStack(
                   index: selectorIndex,
                   children: [
@@ -141,32 +208,49 @@ class _NavigatorBottomState extends State<NavigatorBottom> {
                   ],
                 ),
                 bottomNavigationBar: Container(
-                  margin: EdgeInsets.all(8),
+                  margin: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: const Color.fromARGB(255, 4, 32, 54),
+                    color: navBackgroundColor,
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color.fromARGB(255, 150, 150, 150),
-                        blurRadius: 8,
-                        offset: Offset(0, 4),
+                        color: selectedColor.withOpacity(0.1),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
                       ),
                     ],
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(20),
                     child: BottomNavigationBar(
-                      selectedItemColor: Color.fromARGB(255, 28, 130, 213),
-                      unselectedItemColor: Color.fromARGB(255, 7, 66, 115),
-                      selectedFontSize: 15,
+                      backgroundColor: navBackgroundColor,
+                      selectedItemColor: selectedColor,
+                      unselectedItemColor: unselectedColor,
+                      selectedLabelStyle: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        height: 1.2,
+                      ),
+                      unselectedLabelStyle: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        height: 1.2,
+                      ),
                       currentIndex: selectorIndex,
+                      type: BottomNavigationBarType.fixed,
+                      elevation: 0,
                       items: [
                         BottomNavigationBarItem(
                           icon: _buildIcon(
                             0,
                             CupertinoIcons.briefcase,
                             CupertinoIcons.briefcase_fill,
-                            highlight,
+                            selectedColor,
                           ),
                           label: 'Services',
                         ),
@@ -174,8 +258,8 @@ class _NavigatorBottomState extends State<NavigatorBottom> {
                           icon: _buildIcon(
                             1,
                             CupertinoIcons.map,
-                            CupertinoIcons.map,
-                            highlight,
+                            CupertinoIcons.map_fill,
+                            selectedColor,
                           ),
                           label: 'Search',
                         ),
@@ -184,7 +268,7 @@ class _NavigatorBottomState extends State<NavigatorBottom> {
                             2,
                             CupertinoIcons.home,
                             CupertinoIcons.home,
-                            highlight,
+                            selectedColor,
                           ),
                           label: 'Home',
                         ),
@@ -193,7 +277,7 @@ class _NavigatorBottomState extends State<NavigatorBottom> {
                             3,
                             CupertinoIcons.chat_bubble,
                             CupertinoIcons.chat_bubble_2_fill,
-                            highlight,
+                            selectedColor,
                             badgeCount: unreadCount,
                           ),
                           label: 'Chat',
@@ -203,13 +287,12 @@ class _NavigatorBottomState extends State<NavigatorBottom> {
                             4,
                             CupertinoIcons.person,
                             CupertinoIcons.person_fill,
-                            highlight,
+                            selectedColor,
                           ),
                           label: 'Profile',
                         ),
                       ],
                       onTap: (val) {
-                        if (val == 3) {}
                         setState(() {
                           selectorIndex = val;
                         });

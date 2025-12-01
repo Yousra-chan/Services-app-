@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:myapp/services/search_service.dart';
+import 'package:myapp/models/UserModel.dart';
 import 'package:myapp/models/ProviderModel.dart';
 import 'search_constants.dart';
 

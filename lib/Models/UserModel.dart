@@ -13,6 +13,13 @@ class UserModel {
   final int totalJobs;
   final double rating;
   final String? fcmToken;
+  final List<String> serviceIds;
+
+  // YOUR ACTUAL FIELDS (from Firestore)
+  final String? profession;
+  final bool subscriptionActive;
+  final Timestamp? fcmTokenUpdatedAt;
+  final List<String> chatIds;
 
   UserModel({
     required this.uid,
@@ -27,9 +34,15 @@ class UserModel {
     this.totalJobs = 0,
     this.rating = 0.0,
     this.fcmToken,
+    this.serviceIds = const [],
+
+    // YOUR ACTUAL FIELDS
+    this.profession,
+    this.subscriptionActive = false,
+    this.fcmTokenUpdatedAt,
+    this.chatIds = const [],
   });
 
-  // Convert UserModel to Map for Firestore
   Map<String, dynamic> toMap() {
     return {
       'uid': uid,
@@ -44,10 +57,16 @@ class UserModel {
       'totalJobs': totalJobs,
       'rating': rating,
       'fcmToken': fcmToken,
+      'serviceIds': serviceIds,
+
+      // YOUR ACTUAL FIELDS
+      'profession': profession,
+      'subscriptionActive': subscriptionActive,
+      'fcmTokenUpdatedAt': fcmTokenUpdatedAt,
+      'chatIds': chatIds,
     };
   }
 
-  // Create UserModel from Firestore data
   factory UserModel.fromMap(Map<String, dynamic> data, String id) {
     return UserModel(
       uid: id,
@@ -62,10 +81,56 @@ class UserModel {
       totalJobs: data['totalJobs'] ?? 0,
       rating: (data['rating'] as num?)?.toDouble() ?? 0.0,
       fcmToken: data['fcmToken'],
+      serviceIds: List<String>.from(data['serviceIds'] ?? []),
+
+      // YOUR ACTUAL FIELDS
+      profession: data['profession'],
+      subscriptionActive: data['subscriptionActive'] ?? false,
+      fcmTokenUpdatedAt: data['fcmTokenUpdatedAt'],
+      chatIds: List<String>.from(data['chatIds'] ?? []),
     );
   }
 
-  // Helper getters to check user roles
+  UserModel copyWith({
+    String? uid,
+    String? name,
+    String? email,
+    String? phone,
+    String? role,
+    String? photoUrl,
+    Timestamp? createdAt,
+    GeoPoint? location,
+    String? address,
+    int? totalJobs,
+    double? rating,
+    String? fcmToken,
+    List<String>? serviceIds,
+    String? profession,
+    bool? subscriptionActive,
+    Timestamp? fcmTokenUpdatedAt,
+    List<String>? chatIds,
+  }) {
+    return UserModel(
+      uid: uid ?? this.uid,
+      name: name ?? this.name,
+      email: email ?? this.email,
+      phone: phone ?? this.phone,
+      role: role ?? this.role,
+      photoUrl: photoUrl ?? this.photoUrl,
+      createdAt: createdAt ?? this.createdAt,
+      location: location ?? this.location,
+      address: address ?? this.address,
+      totalJobs: totalJobs ?? this.totalJobs,
+      rating: rating ?? this.rating,
+      fcmToken: fcmToken ?? this.fcmToken,
+      serviceIds: serviceIds ?? this.serviceIds,
+      profession: profession ?? this.profession,
+      subscriptionActive: subscriptionActive ?? this.subscriptionActive,
+      fcmTokenUpdatedAt: fcmTokenUpdatedAt ?? this.fcmTokenUpdatedAt,
+      chatIds: chatIds ?? this.chatIds,
+    );
+  }
+
   bool get isProvider => role == 'provider';
   bool get isClient => role == 'client';
 }

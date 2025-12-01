@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/ChatModel.dart';
 import '../models/MessageModel.dart';
+import 'firebase_service.dart';
 
 String getCanonicalChatId(String id1, String id2) {
   final ids = [id1, id2]..sort();
@@ -111,6 +112,7 @@ class ChatService {
 
   // === GESTION DES MESSAGES ===
 
+// In chat_service.dart - Update sendMessage method
   Future<void> sendMessage(String chatId, MessageModel message) async {
     final chatDocRef = _chatsRef.doc(chatId);
     final messagesRef = chatDocRef.collection('messages');
@@ -123,6 +125,11 @@ class ChatService {
     final participants =
         List<String>.from(chatDoc.data()?['participants'] ?? []);
     final otherUserId = participants.firstWhere((id) => id != message.senderId);
+
+    // Get participant names for notification
+    final participantNames = chatDoc.data()?['participantNames'] ?? {};
+    final senderName = participantNames[message.senderId] ?? 'Someone';
+    final receiverName = participantNames[otherUserId] ?? 'User';
 
     final messageDoc = messagesRef.doc();
     final messageData = {
@@ -142,7 +149,42 @@ class ChatService {
       });
     });
 
+    // ✅ ADD THIS: Create notification for the receiver
+    try {
+      await FirebaseService.createNotification(
+        userId: otherUserId,
+        title: 'New Message from $senderName',
+        message: message.text.length > 50
+            ? '${message.text.substring(0, 50)}...'
+            : message.text,
+        type: 'message',
+        chatId: chatId,
+        senderId: message.senderId,
+        senderName: senderName,
+        actionText: 'Reply',
+      );
+      print('📬 Notification created for user: $otherUserId');
+    } catch (e) {
+      print('❌ Error creating notification: $e');
+    }
+
     print('Message envoyé avec succès dans le chat $chatId');
+  }
+
+  Future<void> testNotification(String chatId, String currentUserId) async {
+    try {
+      final testMessage = MessageModel(
+        senderId: currentUserId,
+        text: 'Test message for notification',
+        timestamp: Timestamp.now(),
+        type: 'text',
+      );
+
+      await sendMessage(chatId, testMessage);
+      print('✅ Test message and notification sent');
+    } catch (e) {
+      print('❌ Test failed: $e');
+    }
   }
 
   Stream<List<MessageModel>> listenMessages(

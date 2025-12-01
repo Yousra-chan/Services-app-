@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>My New App</string>
+	<string>Akhdem Li</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -13,7 +13,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>my_new_app</string>
+	<string>akhdem_li</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -45,5 +45,66 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	
+	<!-- ===== MATCHING ANDROID MANIFEST FUNCTIONALITY ===== -->
+	
+	<!-- URL Schemes for external app integration -->
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<!-- Phone calls -->
+		<string>tel</string>
+		<string>telprompt</string>
+		
+		<!-- WhatsApp -->
+		<string>whatsapp</string>
+		<string>whatsapp-api</string>
+		
+		<!-- Web URLs -->
+		<string>https</string>
+		<string>http</string>
+		
+		<!-- SMS -->
+		<string>sms</string>
+		<string>smsto</string>
+		
+		<!-- Google Maps -->
+		<string>comgooglemaps</string>
+		<string>comgooglemaps-x-callback</string>
+		<string>maps</string>
+	</array>
+	
+	<!-- Location Services (matches ACCESS_FINE_LOCATION/ACCESS_COARSE_LOCATION) -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>This app needs access to your location to show nearby service providers and help you find services in your area.</string>
+	
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>This app needs access to your location to provide you with relevant service providers based on your current location.</string>
+	
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>This app needs access to your location to provide you with relevant service providers based on your current location.</string>
+	
+	<!-- Notifications (matches POST_NOTIFICATIONS) -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
+	
+	<!-- Camera and Photos (for future features) -->
+	<key>NSCameraUsageDescription</key>
+	<string>This app needs camera access to take photos for your profile or service listings.</string>
+	
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>This app needs photo library access to upload images for your profile or service listings.</string>
+	
+	<!-- Microphone (for future voice features) -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>This app needs microphone access for voice messages or calls within the app.</string>
+	
+	<!-- Background processing (matches WAKE_LOCK equivalent) -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+		<string>processing</string>
+	</array>
 </dict>
 </plist>

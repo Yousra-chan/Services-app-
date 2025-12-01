@@ -6,6 +6,7 @@ class Service {
   final String title;
   final String description;
   final String category;
+  final String subcategory;
   final double price;
   final String priceUnit;
   final List<String> images;
@@ -25,6 +26,7 @@ class Service {
     required this.title,
     required this.description,
     required this.category,
+    required this.subcategory,
     required this.price,
     required this.priceUnit,
     this.images = const [],
@@ -39,7 +41,6 @@ class Service {
     this.tags = const [],
   });
 
-  // Add these methods if missing
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -47,6 +48,7 @@ class Service {
       'title': title,
       'description': description,
       'category': category,
+      'subcategory': subcategory,
       'price': price,
       'priceUnit': priceUnit,
       'images': images,
@@ -54,8 +56,10 @@ class Service {
       'latitude': latitude,
       'longitude': longitude,
       'isActive': isActive,
-      'createdAt': createdAt.millisecondsSinceEpoch,
-      'updatedAt': updatedAt.millisecondsSinceEpoch,
+      'createdAt':
+          Timestamp.fromDate(createdAt), // Convert to Firestore Timestamp
+      'updatedAt':
+          Timestamp.fromDate(updatedAt), // Convert to Firestore Timestamp
       'rating': rating,
       'totalReviews': totalReviews,
       'tags': tags,
@@ -63,7 +67,7 @@ class Service {
   }
 
   factory Service.fromMap(Map<String, dynamic> map) {
-    // Helper function to parse timestamps safely
+    // Helper function to parse timestamp
     DateTime parseTimestamp(dynamic timestamp) {
       if (timestamp is Timestamp) {
         return timestamp.toDate();
@@ -81,6 +85,7 @@ class Service {
       title: map['title'] ?? '',
       description: map['description'] ?? '',
       category: map['category'] ?? '',
+      subcategory: map['subcategory'] ?? '',
       price: (map['price'] as num?)?.toDouble() ?? 0.0,
       priceUnit: map['priceUnit'] ?? 'per service',
       images: List<String>.from(map['images'] ?? []),
@@ -91,14 +96,13 @@ class Service {
       createdAt: parseTimestamp(map['createdAt']),
       updatedAt: parseTimestamp(map['updatedAt']),
       rating: (map['rating'] as num?)?.toDouble() ?? 0.0,
-      totalReviews: (map['totalReviews'] is int) ? map['totalReviews'] : 0,
+      totalReviews: (map['totalReviews'] as int?) ?? 0,
       tags: List<String>.from(map['tags'] ?? []),
     );
   }
 
-  // Helper methods
   String get displayPrice {
-    return '\$$price $priceUnit';
+    return '$price DZD $priceUnit';
   }
 
   String get shortDescription {

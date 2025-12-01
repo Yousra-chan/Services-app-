@@ -1,11 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:myapp/models/UserModel.dart';
 import 'package:myapp/models/ProviderModel.dart';
 
 class ProviderService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final String _collectionName = 'users';
 
-  // ADD THIS MISSING METHOD:
   /// Get all active providers
   Future<List<ProviderModel>> getAllProviders() async {
     try {
@@ -15,9 +15,11 @@ class ProviderService {
           .where('subscriptionActive', isEqualTo: true)
           .get();
 
-      return querySnapshot.docs
-          .map((doc) => ProviderModel.fromMap(doc.data(), doc.id))
-          .toList();
+      return querySnapshot.docs.map((doc) {
+        final user =
+            UserModel.fromMap(doc.data() as Map<String, dynamic>, doc.id);
+        return ProviderModel.fromUser(user);
+      }).toList();
     } catch (e) {
       throw Exception('Failed to get all providers: $e');
     }
@@ -37,10 +39,11 @@ class ProviderService {
 
       // Check if user is actually a provider
       if (data['role'] != 'provider') {
-        throw Exception('User is not a provider');
+        return null;
       }
 
-      return ProviderModel.fromMap(data, doc.id);
+      final user = UserModel.fromMap(data, doc.id);
+      return ProviderModel.fromUser(user);
     } catch (e) {
       throw Exception('Failed to get provider: $e');
     }
@@ -79,9 +82,11 @@ class ProviderService {
           .limit(limit)
           .get();
 
-      return querySnapshot.docs
-          .map((doc) => ProviderModel.fromMap(doc.data(), doc.id))
-          .toList();
+      return querySnapshot.docs.map((doc) {
+        final user =
+            UserModel.fromMap(doc.data() as Map<String, dynamic>, doc.id);
+        return ProviderModel.fromUser(user);
+      }).toList();
     } catch (e) {
       throw Exception('Failed to get featured providers: $e');
     }
@@ -94,12 +99,14 @@ class ProviderService {
           .collection(_collectionName)
           .where('role', isEqualTo: 'provider')
           .where('subscriptionActive', isEqualTo: true)
-          .where('services', arrayContains: category)
+          .where('serviceCategories', arrayContains: category)
           .get();
 
-      return querySnapshot.docs
-          .map((doc) => ProviderModel.fromMap(doc.data(), doc.id))
-          .toList();
+      return querySnapshot.docs.map((doc) {
+        final user =
+            UserModel.fromMap(doc.data() as Map<String, dynamic>, doc.id);
+        return ProviderModel.fromUser(user);
+      }).toList();
     } catch (e) {
       throw Exception('Failed to get providers by category: $e');
     }

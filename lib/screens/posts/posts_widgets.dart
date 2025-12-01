@@ -1,16 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:provider/provider.dart'; // REQUIRED
+import 'package:myapp/models/UserModel.dart';
+import 'package:provider/provider.dart';
 import 'posts_constants.dart';
-
-// --- NEW IMPORTS REQUIRED FOR CHAT ---
 import 'package:myapp/ViewModel/auth_view_model.dart';
 import 'package:myapp/ViewModel/chat_view_model.dart';
 import 'package:myapp/screens/chat/disscussion/disscussion_page.dart';
-// Note: You may need to import your 'Post' model definition if it's not here.
-// Note: You may need to import your 'ProviderModel' definition if your post stores the full provider object.
 
-// --- POST CARD WIDGET ---
 class PostCard extends StatelessWidget {
   final Post post;
 
@@ -20,14 +16,13 @@ class PostCard extends StatelessWidget {
     final difference = DateTime.now().difference(timestamp);
     if (difference.inHours < 24) {
       if (difference.inHours < 1) {
-        return '${difference.inMinutes}m ago';
+        return '${difference.inMinutes}m';
       }
-      return '${difference.inHours}h ago';
+      return '${difference.inHours}h';
     }
-    return '${difference.inDays}d ago';
+    return '${difference.inDays}d';
   }
 
-  // --- NEW HANDLER FUNCTION ---
   Future<void> _handleChatPress(BuildContext context) async {
     final authViewModel = Provider.of<AuthViewModel>(context, listen: false);
     final currentUser = authViewModel.currentUser;
@@ -36,9 +31,9 @@ class PostCard extends StatelessWidget {
 
     if (currentUser == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please sign in to contact a user.'),
-          backgroundColor: Colors.red,
+        SnackBar(
+          content: const Text('Please sign in to contact a user.'),
+          backgroundColor: kSeekingColor,
         ),
       );
       return;
@@ -46,42 +41,30 @@ class PostCard extends StatelessWidget {
 
     if (currentUser.uid == peerId) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('You cannot chat with yourself.'),
-          backgroundColor: Colors.orange,
+        SnackBar(
+          content: const Text('You cannot chat with yourself.'),
+          backgroundColor: kAccentColor,
         ),
       );
       return;
     }
 
-    // Show temporary loading indicator
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Starting chat...'),
-        duration: Duration(seconds: 1),
-      ),
-    );
-
     try {
-      // 1. Initialize ChatViewModel
       final chatViewModel = ChatViewModel(userId: currentUser.uid);
-
-      // 2. Get or Create the Chat ID
       final chatId = await chatViewModel.createChat(
         clientId: currentUser.uid,
         providerId: peerId,
       );
 
       if (chatId != null && context.mounted) {
-        // 3. Navigate to Discussion Page
         Navigator.push(
           context,
           MaterialPageRoute(
             builder: (context) => DiscussionPage(
               chatId: chatId,
               currentUserId: currentUser.uid,
-              contactName: post.user, // Use the post author's name
-              isOnline: true, // Placeholder
+              contactName: post.user,
+              isOnline: true,
               chatViewModel: chatViewModel,
             ),
           ),
@@ -94,7 +77,7 @@ class PostCard extends StatelessWidget {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error: Could not start chat. $e'),
-            backgroundColor: Colors.red,
+            backgroundColor: kSeekingColor,
           ),
         );
       }
@@ -106,154 +89,215 @@ class PostCard extends StatelessWidget {
     final Color typeColor =
         post.type == PostType.seeking ? kSeekingColor : kOfferingColor;
     final String typeLabel =
-        post.type == PostType.seeking ? 'I Need' : 'I Offer';
+        post.type == PostType.seeking ? 'Looking for' : 'Offering';
+    final IconData typeIcon = post.type == PostType.seeking
+        ? CupertinoIcons.search
+        : CupertinoIcons.briefcase;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 15),
-      padding: const EdgeInsets.all(15),
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: kCardBackgroundColor,
-        borderRadius: BorderRadius.circular(20),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: typeColor.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // User Info Row (Avatar, Name, Type, Time)
-          Row(
-            children: [
-              CircleAvatar(
-                backgroundColor: typeColor.withOpacity(0.2),
-                radius: 18,
-                child: Text(
-                  post.user.isNotEmpty ? post.user[0] : '?',
-                  style: TextStyle(
-                    color: typeColor,
-                    fontWeight: FontWeight.bold,
+          // Header - User info and time
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                // User avatar
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: typeColor.withOpacity(0.1),
+                    border: Border.all(
+                      color: typeColor.withOpacity(0.3),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Center(
+                    child: Text(
+                      post.user.isNotEmpty ? post.user[0].toUpperCase() : '?',
+                      style: TextStyle(
+                        color: typeColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  post.user,
+                const SizedBox(width: 12),
+
+                // User name and service type
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        post.user,
+                        style: const TextStyle(
+                          color: kDarkTextColor,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15,
+                          fontFamily: 'Exo2',
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Icon(
+                            typeIcon,
+                            color: typeColor,
+                            size: 12,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            typeLabel,
+                            style: TextStyle(
+                              color: typeColor,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              fontFamily: 'Exo2',
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            width: 3,
+                            height: 3,
+                            decoration: BoxDecoration(
+                              color: kMutedTextColor,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            _formatTime(post.timestamp),
+                            style: const TextStyle(
+                              color: kMutedTextColor,
+                              fontSize: 12,
+                              fontFamily: 'Exo2',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Category badge
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: kLightBackgroundColor,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: kMutedTextColor.withOpacity(0.2)),
+                  ),
+                  child: Text(
+                    post.serviceCategory,
+                    style: const TextStyle(
+                      color: kDarkTextColor,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      fontFamily: 'Exo2',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Content
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Title
+                Text(
+                  post.title,
                   style: const TextStyle(
                     color: kDarkTextColor,
                     fontWeight: FontWeight.w700,
-                    fontSize: 15,
+                    fontSize: 16,
                     fontFamily: 'Exo2',
+                    height: 1.3,
                   ),
                 ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
-                ),
-                decoration: BoxDecoration(
-                  color: typeColor,
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                child: Text(
-                  typeLabel,
+                const SizedBox(height: 8),
+
+                // Description
+                Text(
+                  post.body,
                   style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
+                    color: kDarkTextColor,
+                    fontSize: 14,
                     fontFamily: 'Exo2',
+                    height: 1.4,
                   ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                _formatTime(post.timestamp),
-                style: const TextStyle(
-                  color: kMutedTextColor,
-                  fontSize: 12,
-                  fontFamily: 'Exo2',
-                ),
-              ),
-            ],
-          ),
-
-          const Divider(
-            height: 25,
-            thickness: 0.5,
-            color: kLightBackgroundColor,
-          ),
-
-          // Post Title and Body
-          Text(
-            post.title,
-            style: const TextStyle(
-              color: kDarkTextColor,
-              fontWeight: FontWeight.w800,
-              fontSize: 18,
-              fontFamily: 'Exo2',
+                const SizedBox(height: 16),
+              ],
             ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            post.body,
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: kDarkTextColor,
-              fontSize: 14,
-              fontFamily: 'Exo2',
-              height: 1.4,
-            ),
+
+          // Action buttons
+          Container(
+            height: 1,
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            color: Colors.grey.shade100,
           ),
-          const SizedBox(height: 15),
-
-          // Category and Contact Button Row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              // Category Tag
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: kLightBackgroundColor,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: typeColor.withOpacity(0.5)),
-                ),
-                child: Text(
-                  post.serviceCategory,
-                  style: TextStyle(
-                    color: typeColor,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    fontFamily: 'Exo2',
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                // Contact button
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => _handleChatPress(context),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      decoration: BoxDecoration(
+                        color: kPrimaryBlue,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            CupertinoIcons.chat_bubble_text,
+                            color: Colors.white,
+                            size: 16,
+                          ),
+                          SizedBox(width: 6),
+                          Text(
+                            'Contact',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                              fontFamily: 'Exo2',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-              ),
-
-              // Contact Button (UPDATED HERE)
-              TextButton.icon(
-                onPressed: () =>
-                    _handleChatPress(context), // Calling the new handler
-                icon: const Icon(
-                  CupertinoIcons.chat_bubble_2,
-                  color: kPrimaryBlue,
-                  size: 20,
-                ),
-                label: const Text(
-                  'Contact',
-                  style: TextStyle(
-                    color: kPrimaryBlue,
-                    fontWeight: FontWeight.bold,
-                    fontFamily: 'Exo2',
-                  ),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
@@ -261,12 +305,16 @@ class PostCard extends StatelessWidget {
   }
 }
 
-// --- CREATE POST MODAL WIDGET ---
-
+// Keep the rest of your CreatePostModal class as is...
 class CreatePostModal extends StatefulWidget {
   final Function(Post post) onPostCreated;
+  final UserModel user;
 
-  const CreatePostModal({super.key, required this.onPostCreated});
+  const CreatePostModal({
+    super.key,
+    required this.onPostCreated,
+    required this.user,
+  });
 
   @override
   State<CreatePostModal> createState() => _CreatePostModalState();
@@ -276,6 +324,11 @@ class _CreatePostModalState extends State<CreatePostModal> {
   final _formKey = GlobalKey<FormState>();
   String _title = '';
   String _body = '';
+
+  PostType get _defaultType {
+    return widget.user.isProvider ? PostType.offering : PostType.seeking;
+  }
+
   PostType _type = PostType.seeking;
   String _serviceCategory = 'Electrician';
 
@@ -284,14 +337,20 @@ class _CreatePostModalState extends State<CreatePostModal> {
     "Plumbing",
     "Tutoring",
     "Handyman",
+    "Cleaning",
     "Other",
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _type = _defaultType;
+  }
 
   void _submitPost() {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
 
-      // Get current user data using Provider
       final authViewModel = Provider.of<AuthViewModel>(context, listen: false);
       final currentUser = authViewModel.currentUser;
 
@@ -305,31 +364,18 @@ class _CreatePostModalState extends State<CreatePostModal> {
         return;
       }
 
-      // Determine the user's display name, using email as a fallback
-      // We assume UserModel has both 'name' (for display) and 'email'
-      final String userName = currentUser.name ??
-          currentUser.email ??
-          'Anonymous User'; // <-- FIX: Use email as a better fallback
-
-      // Create the new post object
       final newPost = Post(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         title: _title,
         body: _body,
-
-        // Use the determined user name
-        user: userName,
-
-        userId: currentUser.uid,
+        user: widget.user.name,
+        userId: widget.user.uid,
         type: _type,
         serviceCategory: _serviceCategory,
         timestamp: DateTime.now(),
       );
 
-      // Pass the data back to the parent (FeedScreen)
       widget.onPostCreated(newPost);
-
-      // Close the modal
       Navigator.pop(context);
     }
   }
@@ -338,9 +384,10 @@ class _CreatePostModalState extends State<CreatePostModal> {
   Widget build(BuildContext context) {
     final typeColor =
         _type == PostType.seeking ? kSeekingColor : kOfferingColor;
+    final bool isProvider = widget.user.isProvider;
 
     return Container(
-      padding: const EdgeInsets.only(top: 25, left: 25, right: 25, bottom: 25),
+      padding: const EdgeInsets.only(top: 30, left: 25, right: 25, bottom: 30),
       decoration: const BoxDecoration(
         color: kLightBackgroundColor,
         borderRadius: BorderRadius.only(
@@ -355,93 +402,113 @@ class _CreatePostModalState extends State<CreatePostModal> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text(
-                "Create a New Post",
-                textAlign: TextAlign.center,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    "Create Post",
+                    style: TextStyle(
+                      color: kPrimaryBlue,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
+                      fontFamily: 'Exo2',
+                    ),
+                  ),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: typeColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: typeColor.withOpacity(0.3)),
+                    ),
+                    child: Text(
+                      isProvider ? "Service Provider" : "Client",
+                      style: TextStyle(
+                        color: typeColor,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                isProvider
+                    ? "Share your professional services with the community"
+                    : "Let providers know what service you need",
                 style: TextStyle(
-                  color: kPrimaryBlue,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  fontFamily: 'Exo2',
+                  color: kMutedTextColor,
+                  fontSize: 14,
                 ),
               ),
-              const Divider(height: 30, color: kMutedTextColor),
-
-              // Post Type Toggle
+              const Divider(height: 30, color: Color(0xFFE5E5E5)),
               Container(
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: kCardBackgroundColor,
+                  color: typeColor.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(15),
+                  border: Border.all(color: typeColor.withOpacity(0.3)),
                 ),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: PostType.values.map((type) {
-                    bool isSelected = _type == type;
-                    return Expanded(
-                      child: GestureDetector(
-                        onTap: () => setState(() => _type = type),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 15),
-                          decoration: BoxDecoration(
-                            color: isSelected ? typeColor : Colors.transparent,
-                            borderRadius: BorderRadius.circular(15),
-                          ),
-                          child: Text(
-                            type == PostType.seeking
-                                ? "I Need Service"
-                                : "I Offer Service",
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: isSelected ? Colors.white : kDarkTextColor,
-                              fontWeight: FontWeight.bold,
-                              fontFamily: 'Exo2',
-                            ),
-                          ),
-                        ),
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      isProvider
+                          ? CupertinoIcons.hand_raised
+                          : CupertinoIcons.heart,
+                      color: typeColor,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      isProvider ? "I Offer Service" : "I Need Service",
+                      style: TextStyle(
+                        color: typeColor,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        fontFamily: 'Exo2',
                       ),
-                    );
-                  }).toList(),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 20),
-
-              // Title Input
+              const SizedBox(height: 25),
               TextFormField(
-                decoration: _inputDecoration(
-                    'Title (e.g., Need Electrician in North District)'),
-                maxLength: 50,
+                decoration: _inputDecoration(isProvider
+                    ? "Service Title (e.g., Professional Electrical Services)"
+                    : "What do you need? (e.g., Need Electrician for Home Wiring)"),
+                maxLength: 60,
                 validator: (value) =>
                     value!.isEmpty ? 'Title cannot be empty' : null,
                 onSaved: (value) => _title = value!,
               ),
-              const SizedBox(height: 10),
-
-              // Body Input
+              const SizedBox(height: 15),
               TextFormField(
-                decoration: _inputDecoration(
-                    'Describe your needs or service offered...'),
+                decoration: _inputDecoration(isProvider
+                    ? "Describe your service, experience, and expertise..."
+                    : "Describe your needs, location, and any specific requirements..."),
                 maxLines: 4,
-                maxLength: 200,
+                maxLength: 300,
                 validator: (value) =>
                     value!.length < 10 ? 'Description is too short' : null,
                 onSaved: (value) => _body = value!,
               ),
               const SizedBox(height: 20),
-
-              // Category Dropdown
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 15),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 decoration: BoxDecoration(
                   color: kCardBackgroundColor,
                   borderRadius: BorderRadius.circular(15),
-                  border: Border.all(color: kMutedTextColor.withOpacity(0.5)),
+                  border: Border.all(color: kMutedTextColor.withOpacity(0.3)),
                 ),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<String>(
                     value: _serviceCategory,
                     isExpanded: true,
-                    icon: const Icon(CupertinoIcons.chevron_down,
-                        color: kPrimaryBlue),
+                    icon:
+                        Icon(CupertinoIcons.chevron_down, color: kPrimaryBlue),
                     style: const TextStyle(
                       color: kDarkTextColor,
                       fontSize: 16,
@@ -463,22 +530,21 @@ class _CreatePostModalState extends State<CreatePostModal> {
                 ),
               ),
               const SizedBox(height: 30),
-
-              // Submit Button
               ElevatedButton(
                 onPressed: _submitPost,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: kPrimaryBlue,
-                  padding: const EdgeInsets.symmetric(vertical: 18),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(15),
                   ),
+                  elevation: 4,
                 ),
                 child: const Text(
                   "Publish Post",
                   style: TextStyle(
                     color: Colors.white,
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w700,
                     fontSize: 16,
                     fontFamily: 'Exo2',
                   ),
@@ -511,7 +577,7 @@ class _CreatePostModalState extends State<CreatePostModal> {
         borderRadius: BorderRadius.circular(15),
         borderSide: const BorderSide(color: kPrimaryBlue, width: 2),
       ),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 15),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
     );
   }
 }

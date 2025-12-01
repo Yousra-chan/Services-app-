@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../services/chat_service.dart';
 import '../models/ChatModel.dart';
@@ -114,5 +115,60 @@ class ChatViewModel extends ChangeNotifier {
   void clearError() {
     _error = null;
     notifyListeners();
+  }
+
+  // Add to ChatViewModel
+  Future<String?> getUserProfileImageUrl(String userId) async {
+    try {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .get();
+
+      if (userDoc.exists) {
+        final data = userDoc.data();
+        return data?['photoUrl'] ??
+            data?['profileImage'] ??
+            data?['imageUrl'] ??
+            data?['avatar'] ??
+            '';
+      }
+      return '';
+    } catch (e) {
+      print('❌ Error fetching user profile image: $e');
+      return '';
+    }
+  }
+
+// Add method to get user data by ID
+  Future<Map<String, dynamic>?> getUserData(String userId) async {
+    try {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .get();
+
+      return userDoc.data();
+    } catch (e) {
+      print('❌ Error fetching user data: $e');
+      return null;
+    }
+  }
+
+  // Add to ChatViewModel if not already present
+  Future<ChatModel?> getChatById(String chatId) async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('chats')
+          .doc(chatId)
+          .get();
+      if (doc.exists) {
+        return ChatModel.fromDoc(doc);
+      }
+      return null;
+    } catch (e) {
+      print('Error getting chat: $e');
+      return null;
+    }
   }
 }

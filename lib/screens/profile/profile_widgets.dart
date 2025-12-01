@@ -11,7 +11,16 @@ Widget buildProfileHeader(BuildContext context, UserModel user) {
   return Container(
     padding: EdgeInsets.fromLTRB(20, topPadding + 15, 20, 40),
     decoration: const BoxDecoration(
-      color: kPrimaryBlue,
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          Color.fromARGB(255, 12, 94, 153), // kPrimaryBlue
+          Color(0xFF4A6FDC),
+          Color(0xFF667EEA),
+          Color(0xFF764BA2),
+        ],
+      ),
       borderRadius: BorderRadius.only(
         bottomLeft: Radius.circular(30),
         bottomRight: Radius.circular(30),
@@ -52,14 +61,13 @@ Widget buildProfileHeader(BuildContext context, UserModel user) {
               backgroundColor: kLightBackgroundColor,
               backgroundImage:
                   user.photoUrl.isNotEmpty ? NetworkImage(user.photoUrl) : null,
-              child:
-                  user.photoUrl.isEmpty
-                      ? Icon(
-                        CupertinoIcons.person_fill,
-                        color: kPrimaryBlue,
-                        size: 60,
-                      )
-                      : null,
+              child: user.photoUrl.isEmpty
+                  ? Icon(
+                      CupertinoIcons.person_fill,
+                      color: kPrimaryBlue,
+                      size: 60,
+                    )
+                  : null,
             ),
           ],
         ),
@@ -158,7 +166,7 @@ Widget buildStatisticsRow(UserModel user) {
   );
 }
 
-// Action Tile Widget
+// Rest of the profile_widgets.dart remains the same...
 Widget buildActionTile(
   IconData icon,
   String title,

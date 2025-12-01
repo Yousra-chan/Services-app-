@@ -5,7 +5,8 @@ import 'package:myapp/screens/profile/profile_constants.dart';
 // --- Reusable Tile Widgets (Common to Profile & Settings) ---
 
 // Builds a single action item (e.g., Settings, Privacy). Copied from profile_widgets.dart
-Widget buildActionTile(IconData icon, String title, bool isLast) {
+Widget buildActionTile(IconData icon, String title, bool isLast,
+    {VoidCallback? onTap}) {
   return Padding(
     padding: const EdgeInsets.only(left: 20, right: 20, top: 2),
     child: Column(
@@ -33,9 +34,7 @@ Widget buildActionTile(IconData icon, String title, bool isLast) {
             ),
           ),
           trailing: const Icon(CupertinoIcons.forward, color: kMutedTextColor),
-          onTap: () {
-            // Handle action tap
-          },
+          onTap: onTap, // Use the provided onTap callback
         ),
         if (!isLast)
           const Divider(
@@ -87,9 +86,8 @@ Widget buildSwitchTile(
             activeTrackColor: kPrimaryBlue,
             onChanged: onChanged,
           ),
-          onTap:
-              () =>
-                  onChanged(!value), // Allows tapping the whole tile to toggle
+          onTap: () =>
+              onChanged(!value), // Allows tapping the whole tile to toggle
         ),
         if (!isLast)
           const Divider(

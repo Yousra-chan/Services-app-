@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:myapp/ViewModel/chat_view_model.dart';
-import 'constants.dart'; // Assurez-vous que les constantes (kPrimaryBlue, etc.) sont bien définies
+import 'constants.dart';
 import 'package:myapp/screens/chat/disscussion/disscussion_page.dart';
 import 'package:myapp/models/chatmodel.dart';
 import 'package:intl/intl.dart';

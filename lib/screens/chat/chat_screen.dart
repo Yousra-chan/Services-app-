@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:http/http.dart' as http;
+import 'package:myapp/utils/image_utils.dart';
 import 'package:provider/provider.dart';
 import 'package:myapp/ViewModel/chat_view_model.dart';
 import 'package:myapp/models/ChatModel.dart';
@@ -7,6 +9,7 @@ import 'package:myapp/screens/chat/constants.dart';
 import 'package:myapp/screens/chat/disscussion/disscussion_page.dart';
 import 'package:intl/intl.dart';
 
+// Add the missing buildAvatar function
 Widget buildAvatar(bool isSearchIcon, [String imageUrl = '']) {
   return Container(
     width: 55,
@@ -28,21 +31,52 @@ Widget buildAvatar(bool isSearchIcon, [String imageUrl = '']) {
     child: CircleAvatar(
       radius: 25,
       backgroundColor: isSearchIcon ? Colors.white : kLightGreyBlue,
+      backgroundImage: !isSearchIcon && imageUrl.isNotEmpty
+          ? ImageUtils.getImageProvider(imageUrl)
+          : null,
       child: isSearchIcon
           ? Icon(CupertinoIcons.search, color: kPrimaryBlue, size: 26)
-          : (imageUrl.isNotEmpty
-              ? ClipOval(
-                  child: Image.network(
-                    imageUrl,
-                    width: 50,
-                    height: 50,
-                    fit: BoxFit.cover,
-                  ),
-                )
-              : Icon(CupertinoIcons.person_fill,
-                  color: kPrimaryBlue, size: 26)),
+          : (imageUrl.isEmpty
+              ? Icon(CupertinoIcons.person_fill, color: kPrimaryBlue, size: 26)
+              : _buildImageLoadingFallback(imageUrl)),
     ),
   );
+}
+
+Widget _buildImageLoadingFallback(String imageUrl) {
+  return FutureBuilder<bool>(
+    future: _checkImageValidity(imageUrl),
+    builder: (context, snapshot) {
+      if (snapshot.connectionState == ConnectionState.waiting) {
+        return CircularProgressIndicator(
+          strokeWidth: 2,
+          valueColor: AlwaysStoppedAnimation<Color>(kPrimaryBlue),
+        );
+      }
+
+      if (snapshot.hasError || !(snapshot.data ?? false)) {
+        return Icon(CupertinoIcons.person_fill, color: kPrimaryBlue, size: 26);
+      }
+
+      return Container();
+    },
+  );
+}
+
+Future<bool> _checkImageValidity(String imageUrl) async {
+  try {
+    if (ImageUtils.isNetworkImage(imageUrl)) {
+      final response = await http.head(Uri.parse(imageUrl));
+      return response.statusCode == 200;
+    } else if (ImageUtils.isBase64Image(imageUrl)) {
+      final bytes = ImageUtils.decodeBase64Image(imageUrl);
+      return bytes != null && bytes.isNotEmpty;
+    }
+    return false;
+  } catch (e) {
+    print('❌ Image validation error: $e');
+    return false;
+  }
 }
 
 Widget buildChatTile(
@@ -51,6 +85,7 @@ Widget buildChatTile(
   String userId, {
   required int unreadCount,
   required String contactName,
+  String? profileImageUrl,
 }) {
   final bool isUnread = unreadCount > 0;
   final bool isOnline = chat.providerId.hashCode % 3 == 0;
@@ -76,15 +111,8 @@ Widget buildChatTile(
       leading: Stack(
         alignment: Alignment.bottomRight,
         children: [
-          CircleAvatar(
-            radius: 28,
-            backgroundColor: kLightGreyBlue,
-            child: Icon(
-              CupertinoIcons.person_fill,
-              color: kPrimaryBlue,
-              size: 30,
-            ),
-          ),
+          // Enhanced avatar with base64 support
+          _buildEnhancedChatAvatar(profileImageUrl ?? ''),
           if (isOnline)
             Positioned(
               right: 0,
@@ -160,6 +188,96 @@ Widget buildChatTile(
         ],
       ),
     ),
+  );
+}
+
+Widget _buildEnhancedChatAvatar(String imageUrl) {
+  // If imageUrl is empty, show placeholder immediately
+  if (imageUrl.isEmpty) {
+    return Container(
+      width: 55,
+      height: 55,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: Colors.white54,
+          width: 2.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: kSoftShadowColor.withOpacity(0.4),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: CircleAvatar(
+        radius: 25,
+        backgroundColor: kLightGreyBlue,
+        child: Icon(
+          CupertinoIcons.person_fill,
+          color: kPrimaryBlue,
+          size: 26,
+        ),
+      ),
+    );
+  }
+
+  final imageProvider = ImageUtils.getImageProvider(imageUrl);
+
+  return Container(
+    width: 55,
+    height: 55,
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      border: Border.all(
+        color: Colors.white54,
+        width: 2.5,
+      ),
+      boxShadow: [
+        BoxShadow(
+          color: kSoftShadowColor.withOpacity(0.4),
+          blurRadius: 10,
+          offset: const Offset(0, 4),
+        ),
+      ],
+    ),
+    child: CircleAvatar(
+      radius: 25,
+      backgroundColor: kLightGreyBlue,
+      backgroundImage: imageProvider,
+      child: imageProvider == null
+          ? Icon(
+              CupertinoIcons.person_fill,
+              color: kPrimaryBlue,
+              size: 26,
+            )
+          : _buildChatAvatarLoadingFallback(imageUrl),
+    ),
+  );
+}
+
+Widget _buildChatAvatarLoadingFallback(String imageUrl) {
+  return FutureBuilder<bool>(
+    future: _checkImageValidity(imageUrl),
+    builder: (context, snapshot) {
+      if (snapshot.connectionState == ConnectionState.waiting) {
+        return CircularProgressIndicator(
+          strokeWidth: 2,
+          valueColor: AlwaysStoppedAnimation<Color>(kPrimaryBlue),
+        );
+      }
+
+      if (snapshot.hasError || !(snapshot.data ?? false)) {
+        return Icon(
+          CupertinoIcons.person_fill,
+          color: kPrimaryBlue,
+          size: 26,
+        );
+      }
+
+      return Container();
+    },
   );
 }
 
@@ -303,11 +421,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      // App came to foreground - you could reset badge here if needed
-      // For example, you could mark all messages as read when app comes to foreground
-      // and the chat screen is visible
-    }
+    if (state == AppLifecycleState.resumed) {}
   }
 
   @override
@@ -316,7 +430,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       create: (context) => ChatViewModel(userId: widget.userId),
       child: Consumer<ChatViewModel>(
         builder: (context, chatViewModel, child) {
-          return _buildChatScreen(context, chatViewModel); // Added context
+          return _buildChatScreen(context, chatViewModel);
         },
       ),
     );
@@ -324,257 +438,373 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
 
   Widget _buildChatScreen(BuildContext context, ChatViewModel chatViewModel) {
     return Scaffold(
-      backgroundColor: kLightGreyBlue,
-      appBar: AppBar(
-        title: const Text(
-          "Discussions",
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 28,
-            fontWeight: FontWeight.w800,
-            fontFamily: 'Exo2',
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color.fromARGB(255, 12, 94, 153), // kPrimaryBlue
+              Color(0xFF4A6FDC),
+              Color(0xFF667EEA),
+              Color(0xFF764BA2),
+            ],
           ),
         ),
-        elevation: 0,
-        backgroundColor: kPrimaryBlue,
-      ),
-      body: Column(
-        children: [
-          // Section Stories/Status - Now shows only previous contacts
-          Container(
-            height: 110,
-            decoration: const BoxDecoration(
-              color: kPrimaryBlue,
-              borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(30),
-                bottomRight: Radius.circular(30),
+        child: Column(
+          children: [
+            // Enhanced Gradient Header
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.only(
+                top: MediaQuery.of(context).padding.top + 20,
+                left: 25,
+                right: 25,
+                bottom: 20,
+              ),
+              decoration: const BoxDecoration(
+                borderRadius: BorderRadius.only(
+                  bottomLeft: Radius.circular(40),
+                  bottomRight: Radius.circular(40),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        "Discussions",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 28,
+                          fontWeight: FontWeight.w800,
+                          fontFamily: 'Exo2',
+                        ),
+                      ),
+                      // You can add notification icon or other widgets here
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                ],
               ),
             ),
-            child: StreamBuilder<List<ChatModel>>(
-              stream: chatViewModel.userChatsStream,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                    child: CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  );
-                }
 
-                final chats = snapshot.data ?? [];
-
-                // Extract unique contacts from chats
-                final contacts =
-                    _extractContactsFromChats(chats, widget.userId);
-
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: contacts.length + 1, // +1 for search icon
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    // Look for this existing code and replace the entire itemBuilder:
-                    itemBuilder: (context, index) {
-                      if (index == 0) {
-                        // Search icon
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              buildAvatar(true),
-                              const Padding(
-                                padding: EdgeInsets.only(top: 4.0),
-                                child: Text(
-                                  "Rechercher",
-                                  style: TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 12,
-                                    fontFamily: 'Exo2',
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }
-
-                      final contact = contacts[index - 1];
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            buildAvatar(
-                                false,
-                                contact[
-                                    'imageUrl']!), // ← This is the problematic line
-                            Padding(
-                              padding: const EdgeInsets.only(top: 4.0),
-                              child: SizedBox(
-                                width: 60,
-                                child: Text(
-                                  contact['name']!,
-                                  style: const TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 12,
-                                    fontFamily: 'Exo2',
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                  textAlign: TextAlign.center,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
+            // Main Content Area with subtle gradient continuation
+            Expanded(
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(40),
+                    topRight: Radius.circular(40),
                   ),
-                );
-              },
-            ),
-          ),
-          const SizedBox(height: 15),
+                ),
+                child: Column(
+                  children: [
+                    // Stories Section with gradient background
+                    Container(
+                      height: 110,
+                      decoration: const BoxDecoration(
+                        color: Colors.transparent,
+                      ),
+                      child: StreamBuilder<List<ChatModel>>(
+                        stream: chatViewModel.userChatsStream,
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState ==
+                              ConnectionState.waiting) {
+                            return const Center(
+                              child: CircularProgressIndicator(
+                                valueColor:
+                                    AlwaysStoppedAnimation<Color>(Colors.white),
+                              ),
+                            );
+                          }
 
-          // Liste des discussions
-          // In chat_screen.dart - Fix the chat list builder
-          Expanded(
-            child: StreamBuilder<List<ChatModel>>(
-              stream: chatViewModel.userChatsStream,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                    child: CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(kPrimaryBlue),
-                    ),
-                  );
-                }
-
-                if (snapshot.hasError) {
-                  print('Chat list error: ${snapshot.error}');
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.error_outline,
-                            color: Colors.red, size: 50),
-                        const SizedBox(height: 10),
-                        Text('Erreur: ${snapshot.error}'),
-                        const SizedBox(height: 20),
-                        ElevatedButton(
-                          onPressed: () => setState(() {}),
-                          child: const Text('Réessayer'),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                final chats = snapshot.data ?? [];
-                print('💬 Loaded ${chats.length} chats');
-
-                if (chats.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.chat_outlined,
-                          color: kMutedTextColor,
-                          size: 50,
-                        ),
-                        const SizedBox(height: 10),
-                        const Text(
-                          'Aucune discussion',
-                          style: TextStyle(
-                            color: kMutedTextColor,
-                            fontSize: 16,
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        ElevatedButton(
-                          onPressed: () =>
-                              _createNewChat(context, chatViewModel),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: kPrimaryBlue,
-                            foregroundColor: Colors.white,
-                          ),
-                          child: const Text('Commencer une discussion'),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                return ListView.separated(
-                  itemCount: chats.length,
-                  separatorBuilder: (context, index) =>
-                      const SizedBox(height: 2),
-                  itemBuilder: (context, index) {
-                    final chat = chats[index];
-
-                    // Safe way to get contact name
-                    String contactName;
-                    try {
-                      contactName = chat.getOtherParticipantName(widget.userId);
-                    } catch (e) {
-                      print('❌ Error getting participant name: $e');
-                      contactName = 'Unknown User';
-                    }
-
-                    return AnimatedChatListItem(
-                      index: index,
-                      child: StreamBuilder<int>(
-                        stream: chatViewModel.getUnreadCount(chat.chatId),
-                        builder: (context, unreadSnapshot) {
-                          final unreadCount = unreadSnapshot.data ?? 0;
-
-                          return InkWell(
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => DiscussionPage(
-                                    contactName: contactName,
-                                    isOnline: true,
-                                    chatId: chat.chatId,
-                                    currentUserId: widget.userId,
-                                    chatViewModel: chatViewModel,
+                          final chats = snapshot.data ?? [];
+                          return FutureBuilder<List<Map<String, String>>>(
+                            future: _extractContactsFromChats(
+                                chats, widget.userId, chatViewModel),
+                            builder: (context, contactsSnapshot) {
+                              if (contactsSnapshot.connectionState ==
+                                  ConnectionState.waiting) {
+                                return const Center(
+                                  child: CircularProgressIndicator(
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                        Colors.white),
                                   ),
+                                );
+                              }
+
+                              final contacts = contactsSnapshot.data ?? [];
+
+                              return Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 10),
+                                child: ListView.builder(
+                                  scrollDirection: Axis.horizontal,
+                                  itemCount: contacts.length + 1,
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10),
+                                  itemBuilder: (context, index) {
+                                    if (index == 0) {
+                                      // Search icon using buildAvatar
+                                      return Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 8),
+                                        child: Column(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            buildAvatar(true), // Search avatar
+                                            const Padding(
+                                              padding:
+                                                  EdgeInsets.only(top: 4.0),
+                                              child: Text(
+                                                "Rechercher",
+                                                style: TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 12,
+                                                  fontFamily: 'Exo2',
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    }
+
+                                    final contact = contacts[index - 1];
+                                    return Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8),
+                                      child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          // Use buildAvatar for contact avatars
+                                          buildAvatar(
+                                              false, contact['imageUrl'] ?? ''),
+                                          Padding(
+                                            padding:
+                                                const EdgeInsets.only(top: 4.0),
+                                            child: SizedBox(
+                                              width: 60,
+                                              child: Text(
+                                                contact['name']!,
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 12,
+                                                  fontFamily: 'Exo2',
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
+                                                textAlign: TextAlign.center,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
                                 ),
                               );
                             },
-                            child: buildChatTile(
-                              context,
-                              chat,
-                              widget.userId,
-                              unreadCount: unreadCount,
-                              contactName: contactName,
-                            ),
                           );
                         },
                       ),
-                    );
-                  },
-                );
-              },
+                    ),
+
+                    // Chat List
+                    Expanded(
+                      child: Container(
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(30),
+                            topRight: Radius.circular(30),
+                          ),
+                        ),
+                        child: StreamBuilder<List<ChatModel>>(
+                          stream: chatViewModel.userChatsStream,
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState ==
+                                ConnectionState.waiting) {
+                              return const Center(
+                                child: CircularProgressIndicator(
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                      kPrimaryBlue),
+                                ),
+                              );
+                            }
+
+                            if (snapshot.hasError) {
+                              print('Chat list error: ${snapshot.error}');
+                              return Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(Icons.error_outline,
+                                        color: Colors.red, size: 50),
+                                    const SizedBox(height: 10),
+                                    Text('Erreur: ${snapshot.error}'),
+                                    const SizedBox(height: 20),
+                                    ElevatedButton(
+                                      onPressed: () => setState(() {}),
+                                      child: const Text('Réessayer'),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }
+
+                            final chats = snapshot.data ?? [];
+                            print('💬 Loaded ${chats.length} chats');
+
+                            if (chats.isEmpty) {
+                              return Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.chat_outlined,
+                                      color: kPrimaryBlue,
+                                      size: 50,
+                                    ),
+                                    const SizedBox(height: 10),
+                                    Text(
+                                      'Aucune discussion',
+                                      style: TextStyle(
+                                        color: kPrimaryBlue,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 20),
+                                    ElevatedButton(
+                                      onPressed: () => _createNewChat(
+                                          context, chatViewModel),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: kPrimaryBlue,
+                                        foregroundColor: Colors.white,
+                                      ),
+                                      child: const Text(
+                                          'Commencer une discussion'),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }
+
+                            return FutureBuilder<Map<String, String>>(
+                              future: _getChatProfileImages(
+                                  chats, widget.userId, chatViewModel),
+                              builder: (context, profileImagesSnapshot) {
+                                if (profileImagesSnapshot.connectionState ==
+                                    ConnectionState.waiting) {
+                                  return const Center(
+                                    child: CircularProgressIndicator(
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                          kPrimaryBlue),
+                                    ),
+                                  );
+                                }
+
+                                final profileImages =
+                                    profileImagesSnapshot.data ?? {};
+
+                                return ListView.separated(
+                                  itemCount: chats.length,
+                                  separatorBuilder: (context, index) =>
+                                      const SizedBox(height: 2),
+                                  itemBuilder: (context, index) {
+                                    final chat = chats[index];
+                                    String contactName;
+
+                                    try {
+                                      contactName =
+                                          chat.getOtherParticipantName(
+                                              widget.userId);
+                                    } catch (e) {
+                                      print(
+                                          '❌ Error getting participant name: $e');
+                                      contactName = 'Unknown User';
+                                    }
+
+                                    final otherUserId = chat
+                                        .getOtherParticipantId(widget.userId);
+                                    final profileImageUrl =
+                                        profileImages[otherUserId] ?? '';
+
+                                    return AnimatedChatListItem(
+                                      index: index,
+                                      child: StreamBuilder<int>(
+                                        stream: chatViewModel
+                                            .getUnreadCount(chat.chatId),
+                                        builder: (context, unreadSnapshot) {
+                                          final unreadCount =
+                                              unreadSnapshot.data ?? 0;
+
+                                          return InkWell(
+                                            onTap: () {
+                                              Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (context) =>
+                                                      DiscussionPage(
+                                                    contactName: contactName,
+                                                    isOnline: true,
+                                                    chatId: chat.chatId,
+                                                    currentUserId:
+                                                        widget.userId,
+                                                    chatViewModel:
+                                                        chatViewModel,
+                                                    profileImageUrl:
+                                                        profileImageUrl,
+                                                  ),
+                                                ),
+                                              );
+                                            },
+                                            child: buildChatTile(
+                                              context,
+                                              chat,
+                                              widget.userId,
+                                              unreadCount: unreadCount,
+                                              contactName: contactName,
+                                              profileImageUrl: profileImageUrl,
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    );
+                                  },
+                                );
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _showProviderSelection(context, chatViewModel),
-        backgroundColor: kPrimaryBlue,
-        child: const Icon(Icons.chat, color: Colors.white),
+        backgroundColor: Colors.white,
+        child: Icon(Icons.chat, color: kPrimaryBlue),
       ),
     );
   }
 
-  // Extract unique contacts from chats
-
-  List<Map<String, String>> _extractContactsFromChats(
-      List<ChatModel> chats, String currentUserId) {
+  // Extract unique contacts from chats with profile images
+  Future<List<Map<String, String>>> _extractContactsFromChats(
+      List<ChatModel> chats,
+      String currentUserId,
+      ChatViewModel chatViewModel) async {
     final contacts = <String, Map<String, String>>{};
 
     for (final chat in chats) {
@@ -582,10 +812,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
         final otherUserId = chat.getOtherParticipantId(currentUserId);
         final contactName = chat.getOtherParticipantName(currentUserId);
 
-        // Get profile image URL from participantNames or use default
-        final imageUrl = chat.participantNames[otherUserId] != null
-            ? '' // You can add actual image URL logic here if available
-            : '';
+        // Fetch actual profile image URL using the passed chatViewModel
+        final imageUrl =
+            await chatViewModel.getUserProfileImageUrl(otherUserId) ?? '';
 
         if (!contacts.containsKey(otherUserId)) {
           contacts[otherUserId] = {
@@ -596,7 +825,6 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
         }
       } catch (e) {
         print('❌ Error extracting contact from chat ${chat.chatId}: $e');
-        // Continue with next chat instead of breaking
         continue;
       }
     }
@@ -604,7 +832,27 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     return contacts.values.toList();
   }
 
-// In chat_screen.dart - Fix the _showProviderSelection method
+  // Get profile images for all chats
+  Future<Map<String, String>> _getChatProfileImages(List<ChatModel> chats,
+      String currentUserId, ChatViewModel chatViewModel) async {
+    final profileImages = <String, String>{};
+
+    for (final chat in chats) {
+      try {
+        final otherUserId = chat.getOtherParticipantId(currentUserId);
+        if (!profileImages.containsKey(otherUserId)) {
+          final imageUrl =
+              await chatViewModel.getUserProfileImageUrl(otherUserId) ?? '';
+          profileImages[otherUserId] = imageUrl;
+        }
+      } catch (e) {
+        print('❌ Error getting profile image for chat ${chat.chatId}: $e');
+      }
+    }
+
+    return profileImages;
+  }
+
   void _showProviderSelection(
       BuildContext context, ChatViewModel chatViewModel) {
     showModalBottomSheet(
@@ -740,7 +988,6 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                             const SizedBox(height: 20),
                             ElevatedButton(
                               onPressed: () {
-                                // Option to invite providers or show help
                                 _showNoProvidersHelp(context);
                               },
                               child: const Text('Que faire ?'),
@@ -755,29 +1002,20 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                       itemCount: providers.length,
                       itemBuilder: (context, index) {
                         final provider = providers[index];
+                        final String? photoUrl = provider['photoUrl'];
+                        final String? name = provider['name'];
+
+                        // Debug print to see what photo URLs we're getting
+                        print(
+                            '👤 Provider ${provider['name']} - Photo URL: "$photoUrl"');
+
                         return Card(
                           margin: const EdgeInsets.only(bottom: 12),
                           elevation: 2,
                           child: ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor: kPrimaryBlue,
-                              child: provider['photoUrl']?.isNotEmpty == true
-                                  ? ClipOval(
-                                      child: Image.network(
-                                        provider['photoUrl']!,
-                                        width: 40,
-                                        height: 40,
-                                        fit: BoxFit.cover,
-                                      ),
-                                    )
-                                  : Text(
-                                      provider['name']![0].toUpperCase(),
-                                      style:
-                                          const TextStyle(color: Colors.white),
-                                    ),
-                            ),
+                            leading: _buildProviderAvatar(photoUrl, name),
                             title: Text(
-                              provider['name'] ?? 'Unknown',
+                              name ?? 'Unknown',
                               style:
                                   const TextStyle(fontWeight: FontWeight.bold),
                             ),
@@ -786,11 +1024,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                                 const Icon(Icons.arrow_forward_ios, size: 16),
                             onTap: () {
                               Navigator.pop(context);
-                              _createNewChatWithProvider(
-                                  context,
-                                  chatViewModel,
-                                  provider['id']!,
-                                  provider['name'] ?? 'Prestataire');
+                              _createNewChatWithProvider(context, chatViewModel,
+                                  provider['id']!, name ?? 'Prestataire');
                             },
                           ),
                         );
@@ -802,6 +1037,77 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
             ],
           ),
         );
+      },
+    );
+  }
+
+  Widget _buildProviderAvatar(String? photoUrl, String? name) {
+    // Debug print
+    print('🖼️ Building provider avatar with URL: $photoUrl');
+
+    // If no photo URL, show initial immediately
+    if (photoUrl == null || photoUrl.isEmpty) {
+      final String displayInitial =
+          name != null && name.isNotEmpty ? name[0].toUpperCase() : '?';
+      return CircleAvatar(
+        radius: 24,
+        backgroundColor: kPrimaryBlue,
+        child: Text(
+          displayInitial,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
+        ),
+      );
+    }
+
+    final imageProvider = ImageUtils.getImageProvider(photoUrl);
+    final String displayInitial =
+        name != null && name.isNotEmpty ? name[0].toUpperCase() : '?';
+
+    return CircleAvatar(
+      radius: 24,
+      backgroundColor: kPrimaryBlue,
+      backgroundImage: imageProvider,
+      child: imageProvider == null
+          ? Text(
+              displayInitial,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            )
+          : _buildProviderAvatarLoadingFallback(photoUrl, displayInitial),
+    );
+  }
+
+  Widget _buildProviderAvatarLoadingFallback(
+      String photoUrl, String fallbackInitial) {
+    return FutureBuilder<bool>(
+      future: _checkImageValidity(photoUrl),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return CircularProgressIndicator(
+            strokeWidth: 2,
+            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+          );
+        }
+
+        if (snapshot.hasError || !(snapshot.data ?? false)) {
+          return Text(
+            fallbackInitial,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          );
+        }
+
+        return Container();
       },
     );
   }

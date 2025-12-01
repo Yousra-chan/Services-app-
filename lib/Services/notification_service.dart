@@ -5,11 +5,13 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:myapp/screens/chat/disscussion/disscussion_page.dart';
-import 'package:myapp/ViewModel/chat_view_model.dart';
 import 'package:provider/provider.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:myapp/screens/home/home_constants.dart';
+
+// Remove conflicting imports
+import 'package:myapp/services/firebase_service.dart';
+import 'package:myapp/ViewModel/chat_view_model.dart';
+import 'package:myapp/screens/chat/disscussion/disscussion_page.dart';
 
 // Navigation service for handling notification navigation
 class NavigationService {
@@ -37,7 +39,6 @@ class NavigationService {
         // Navigate directly to DiscussionPage WITH CUSTOM ROUTE
         navigatorKey.currentState?.push(
           PageRouteBuilder(
-            // ← Use PageRouteBuilder instead of MaterialPageRoute
             pageBuilder: (context, animation, secondaryAnimation) =>
                 ChangeNotifierProvider(
               create: (context) => ChatViewModel(userId: userId),
@@ -51,7 +52,6 @@ class NavigationService {
             ),
             transitionsBuilder:
                 (context, animation, secondaryAnimation, child) {
-              // Use a simple fade transition instead of Hero
               return FadeTransition(
                 opacity: animation,
                 child: child,
@@ -74,26 +74,18 @@ class NotificationService {
       FlutterLocalNotificationsPlugin();
 
   static Future<void> initialize() async {
-    print('🔔 Initializing notification service...');
+    print('🔔 [NotificationService] Initializing notification service...');
 
-    // Request notification permissions
     await _requestPermissions();
-
-    // Initialize local notifications
     await _initializeLocalNotifications();
-
-    // Configure FCM
     await _configureFCM();
-
-    // Listen for messages when app is in foreground
     _setupForegroundMessageHandler();
 
-    print('✅ Notification service initialized');
+    print('✅ [NotificationService] Notification service initialized');
   }
 
   static Future<void> _requestPermissions() async {
     try {
-      // Request notification permission
       final settings = await _firebaseMessaging.requestPermission(
         alert: true,
         badge: true,
@@ -102,15 +94,14 @@ class NotificationService {
       );
 
       if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-        print('✅ User granted notification permission');
+        print('✅ [NotificationService] User granted notification permission');
       } else {
-        print('❌ User declined notification permission');
+        print('❌ [NotificationService] User declined notification permission');
       }
 
-      // Also request for local notifications
       await Permission.notification.request();
     } catch (e) {
-      print('❌ Error requesting permissions: $e');
+      print('❌ [NotificationService] Error requesting permissions: $e');
     }
   }
 
@@ -133,39 +124,36 @@ class NotificationService {
       );
 
       await _localNotifications.initialize(settings);
-      print('✅ Local notifications initialized');
+      print('✅ [NotificationService] Local notifications initialized');
     } catch (e) {
-      print('❌ Error initializing local notifications: $e');
+      print(
+          '❌ [NotificationService] Error initializing local notifications: $e');
     }
   }
 
   static Future<void> _configureFCM() async {
     try {
-      // Get FCM token
       String? token = await _firebaseMessaging.getToken();
-      print('🔔 FCM Token: $token');
+      print('🔔 [NotificationService] FCM Token: $token');
 
-      // Save this token to your user document in Firestore
       _saveTokenToFirestore(token);
 
-      // Handle token refresh
       _firebaseMessaging.onTokenRefresh.listen((newToken) {
-        print('🔔 FCM Token refreshed: $newToken');
+        print('🔔 [NotificationService] FCM Token refreshed: $newToken');
         _saveTokenToFirestore(newToken);
       });
 
-      print('✅ FCM configured');
+      print('✅ [NotificationService] FCM configured');
     } catch (e) {
-      print('❌ Error configuring FCM: $e');
+      print('❌ [NotificationService] Error configuring FCM: $e');
     }
   }
 
   static void _setupForegroundMessageHandler() {
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       print(
-          '🔔 Received message in foreground: ${message.notification?.title}');
+          '🔔 [NotificationService] Received message in foreground: ${message.notification?.title}');
 
-      // Show local notification when app is in foreground
       showNotification(
         title: message.notification?.title ?? 'New Message',
         body: message.notification?.body ?? '',
@@ -173,14 +161,13 @@ class NotificationService {
       );
     });
 
-    // Handle when app is in background but not terminated
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      print('🔔 App opened from background via notification');
+      print(
+          '🔔 [NotificationService] App opened from background via notification');
       _handleNotificationClick(message.data);
     });
   }
 
-  // PUBLIC method to show notifications
   static Future<void> showNotification({
     required String title,
     required String body,
@@ -217,9 +204,9 @@ class NotificationService {
         details,
         payload: payload,
       );
-      print('✅ Local notification shown: $title');
+      print('✅ [NotificationService] Local notification shown: $title');
     } catch (e) {
-      print('❌ Error showing local notification: $e');
+      print('❌ [NotificationService] Error showing local notification: $e');
     }
   }
 
@@ -232,7 +219,7 @@ class NotificationService {
         _navigateToDiscussion(chatId);
       }
     } catch (e) {
-      print('❌ Error handling notification click: $e');
+      print('❌ [NotificationService] Error handling notification click: $e');
     }
   }
 
@@ -243,7 +230,7 @@ class NotificationService {
         NavigationService.navigateToDiscussion(chatId, userId);
       }
     } catch (e) {
-      print('❌ Error navigating to discussion: $e');
+      print('❌ [NotificationService] Error navigating to discussion: $e');
     }
   }
 
@@ -258,9 +245,9 @@ class NotificationService {
         'fcmToken': token,
         'fcmTokenUpdatedAt': FieldValue.serverTimestamp(),
       });
-      print('✅ FCM token saved to Firestore');
+      print('✅ [NotificationService] FCM token saved to Firestore');
     } catch (e) {
-      print('❌ Error saving FCM token: $e');
+      print('❌ [NotificationService] Error saving FCM token: $e');
     }
   }
 
@@ -269,27 +256,24 @@ class NotificationService {
     return user?.uid;
   }
 
-  // Subscribe to topics (optional)
   static Future<void> subscribeToTopic(String topic) async {
     try {
       await _firebaseMessaging.subscribeToTopic(topic);
-      print('✅ Subscribed to topic: $topic');
+      print('✅ [NotificationService] Subscribed to topic: $topic');
     } catch (e) {
-      print('❌ Error subscribing to topic: $e');
+      print('❌ [NotificationService] Error subscribing to topic: $e');
     }
   }
 
-  // Unsubscribe from topics
   static Future<void> unsubscribeFromTopic(String topic) async {
     try {
       await _firebaseMessaging.unsubscribeFromTopic(topic);
-      print('✅ Unsubscribed from topic: $topic');
+      print('✅ [NotificationService] Unsubscribed from topic: $topic');
     } catch (e) {
-      print('❌ Error unsubscribing from topic: $e');
+      print('❌ [NotificationService] Error unsubscribing from topic: $e');
     }
   }
 
-  // Get initial message when app is launched from terminated state
   static Future<void> handleInitialMessage() async {
     try {
       RemoteMessage? initialMessage =
@@ -298,11 +282,11 @@ class NotificationService {
         _handleNotificationClick(initialMessage.data);
       }
     } catch (e) {
-      print('❌ Error handling initial message: $e');
+      print('❌ [NotificationService] Error handling initial message: $e');
     }
   }
 
-  // Create message notification
+  // FIXED: SINGLE createMessageNotification method (removed duplicate)
   static Future<void> createMessageNotification({
     required String receiverId,
     required String senderName,
@@ -311,25 +295,75 @@ class NotificationService {
     required String senderId,
   }) async {
     try {
+      print(
+          '🔔 [NotificationService] Creating message notification for: $receiverId');
+
+      // Use FirebaseService instead of direct Firestore for consistency
       await FirebaseService.createNotification(
         userId: receiverId,
         title: 'New message from $senderName',
         message: messageText.length > 50
             ? '${messageText.substring(0, 50)}...'
             : messageText,
-        type: HomeNotificationType.message,
+        type: 'message',
         chatId: chatId,
         senderId: senderId,
         senderName: senderName,
         actionText: 'View Chat',
       );
-      print('✅ Message notification created for user: $receiverId');
+
+      print(
+          '✅ [NotificationService] Message notification created for user: $receiverId');
     } catch (e) {
-      print('❌ Error creating message notification: $e');
+      print('❌ [NotificationService] Error creating message notification: $e');
+
+      // Fallback: Try direct Firestore if FirebaseService fails
+      try {
+        await FirebaseFirestore.instance.collection('notifications').add({
+          'userId': receiverId,
+          'title': 'New message from $senderName',
+          'message': messageText.length > 50
+              ? '${messageText.substring(0, 50)}...'
+              : messageText,
+          'time': Timestamp.now(),
+          'isRead': false,
+          'type': 'message',
+          'chatId': chatId,
+          'senderId': senderId,
+          'senderName': senderName,
+          'actionText': 'View Chat',
+        });
+        print('✅ [NotificationService] Fallback notification created');
+      } catch (fallbackError) {
+        print('❌ [NotificationService] Fallback also failed: $fallbackError');
+      }
     }
   }
 
-  // Background message handler (called from main.dart)
+  // ADD: Test notification method
+  static Future<void> createTestNotification(String userId) async {
+    try {
+      print('🔔 [NotificationService] Creating test notification...');
+
+      await FirebaseService.createNotification(
+        userId: userId,
+        title: 'Test Notification 🔔',
+        message:
+            'This is a test notification to verify the notification system is working correctly',
+        type: 'message',
+        chatId: 'test_chat_${DateTime.now().millisecondsSinceEpoch}',
+        senderId: 'test_sender_123',
+        senderName: 'Test System',
+        actionText: 'View Test',
+      );
+
+      print('✅ [NotificationService] Test notification created successfully');
+    } catch (e) {
+      print('❌ [NotificationService] Error creating test notification: $e');
+    }
+  }
+
+  // Background message handler
   @pragma('vm:entry-point')
   static Future<void> firebaseMessagingBackgroundHandler(
       RemoteMessage message) async {
@@ -340,9 +374,9 @@ class NotificationService {
         body: message.notification?.body ?? '',
         payload: message.data['chatId'] ?? '',
       );
-      print('✅ Background notification handled');
+      print('✅ [NotificationService] Background notification handled');
     } catch (e) {
-      print('❌ Error in background handler: $e');
+      print('❌ [NotificationService] Error in background handler: $e');
     }
   }
 }

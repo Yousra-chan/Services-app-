@@ -1,5 +1,11 @@
+import 'dart:io'; // Required for File
+import 'dart:convert'; // ⬅️ NEW: Required for Base64 encoding
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:image_picker/image_picker.dart'; // Required for picking image
+
 import 'package:myapp/models/UserModel.dart';
 import 'package:myapp/services/auth_service.dart';
 import 'package:myapp/services/user_service.dart';
@@ -97,6 +103,47 @@ class AuthViewModel with ChangeNotifier {
       notifyListeners();
     }, 'Profile update');
   }
+
+  // =======================================================
+  // 📸 REPLACED METHOD: Base64 Encoding for Firestore Storage
+  // =======================================================
+
+  /// Handles picking an image and converting it to a Base64 string.
+  /// This string is small enough for Firestore but should be managed carefully.
+  ///
+  /// @return The Base64 encoded string prefixed with 'data:image/jpeg;base64,'
+  Future<String?> pickImageAndEncode() async {
+    final picker = ImagePicker();
+    // Setting compression and size limits to prevent exceeding Firestore's 1MB document limit
+    final XFile? pickedFile = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxHeight: 400,
+      maxWidth: 400,
+      imageQuality: 75,
+    );
+
+    if (pickedFile == null) {
+      return null; // User cancelled
+    }
+
+    try {
+      final bytes = await File(pickedFile.path).readAsBytes();
+      // Convert the image bytes to a Base64 string
+      final base64Image = base64Encode(bytes);
+
+      // We return the Base64 string with a standard data URI prefix
+      return 'data:image/jpeg;base64,$base64Image';
+    } catch (e) {
+      debugPrint('Error encoding image: $e');
+      _setError(
+          'Failed to encode image for storage. Please try a smaller image.');
+      return null;
+    }
+  }
+
+  // =======================================================
+  // ⬆️ END OF REPLACEMENT METHOD
+  // =======================================================
 
   void clearError() {
     _error = null;
@@ -229,5 +276,40 @@ class AuthViewModel with ChangeNotifier {
     };
 
     return errorMessages[e.code] ?? 'Authentication failed: ${e.message}';
+  }
+
+  Future<void> updateUserRole(String newRole) async {
+    if (_currentUser != null) {
+      try {
+        print(
+            '🔄 [AuthViewModel] Updating user role from ${_currentUser!.role} to $newRole');
+
+        // 1. Update in Firestore
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(_currentUser!.uid)
+            .update({
+          'role': newRole,
+          'updatedAt': Timestamp.now(),
+        });
+
+        print('✅ [AuthViewModel] Firestore update completed');
+
+        // 2. Update local user object using copyWith ⬅️ CLEANER UPDATE
+        _currentUser = _currentUser!.copyWith(role: newRole);
+
+        print('✅ [AuthViewModel] Local user updated to: ${_currentUser!.role}');
+        print('📢 [AuthViewModel] Calling notifyListeners()');
+
+        notifyListeners();
+
+        print('✅ [AuthViewModel] notifyListeners() completed');
+      } catch (e) {
+        print('❌ [AuthViewModel] Error updating user role: $e');
+        rethrow;
+      }
+    } else {
+      print('❌ [AuthViewModel] _currentUser is null - cannot update role');
+    }
   }
 }

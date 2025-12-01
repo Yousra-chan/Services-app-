@@ -55,6 +55,16 @@ dependencies:
 
   # Geospatial Firestore queries
   geoflutterfire_plus: ^0.0.21
+  wilaya_commune: ^0.0.1
+  dzair_data_usage: ^1.0.1
+
+  #url launcher
+  url_launcher: ^6.1.11 
+
+  #image picker
+  image_picker: ^1.0.4
+
+ 
 
 dev_dependencies:
   flutter_test:

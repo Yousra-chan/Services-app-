@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import '../services/search_service.dart';
 import '../models/ProviderModel.dart';
@@ -38,7 +40,7 @@ class SearchViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Execute both searches separately to avoid type casting issues
+      // Execute both searches
       final providerResults =
           await _searchService.searchProvidersByProfessionOrName(query);
       final serviceResults = await _searchService.searchServices(query);
@@ -46,9 +48,10 @@ class SearchViewModel extends ChangeNotifier {
       _providerResults = providerResults;
       _serviceResults = serviceResults;
     } catch (e) {
-      _error = 'Failed to execute search: $e';
+      _error = 'Échec de la recherche: $e';
       _providerResults = [];
       _serviceResults = [];
+      print('❌ Search error: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -72,8 +75,9 @@ class SearchViewModel extends ChangeNotifier {
           await _searchService.searchProvidersByProfessionOrName(query);
       _serviceResults = [];
     } catch (e) {
-      _error = 'Failed to search providers: $e';
+      _error = 'Échec de la recherche de prestataires: $e';
       _providerResults = [];
+      print('❌ Provider search error: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -96,8 +100,9 @@ class SearchViewModel extends ChangeNotifier {
       _serviceResults = await _searchService.searchServices(query);
       _providerResults = [];
     } catch (e) {
-      _error = 'Failed to search services: $e';
+      _error = 'Échec de la recherche de services: $e';
       _serviceResults = [];
+      print('❌ Service search error: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -106,79 +111,183 @@ class SearchViewModel extends ChangeNotifier {
 
   /// Search services by category
   Future<void> searchServicesByCategory(String category) async {
+    if (category.trim().isEmpty) {
+      _serviceResults = [];
+      notifyListeners();
+      return;
+    }
+
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      _serviceResults = await _searchService.searchServicesByCategory(category);
+      _serviceResults = await _searchService.searchServices(category);
       _providerResults = [];
     } catch (e) {
-      _error = 'Failed to search services by category: $e';
+      _error = 'Échec de la recherche par catégorie: $e';
       _serviceResults = [];
+      print('❌ Category search error: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  /// Get nearby providers
-  Future<void> loadNearbyProviders() async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
-
-    try {
-      _providerResults = await _searchService.searchProvidersNearby();
-      _serviceResults = [];
-    } catch (e) {
-      _error = 'Failed to load nearby providers: $e';
-      _providerResults = [];
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
-
-  /// Get featured services for homepage
+  /// Get featured services for homepage (fallback to highly rated services)
   Future<void> loadFeaturedServices() async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      _serviceResults = await _searchService.getFeaturedServices();
+      // Get all active services and sort by rating
+      _serviceResults = await _searchService.searchServices('');
+
+      // Filter and sort
+      _serviceResults = _serviceResults
+          .where((service) => service.rating >= 4.0) // Only highly rated
+          .toList()
+        ..sort((a, b) => b.rating.compareTo(a.rating))
+        ..take(10).toList();
+
       _providerResults = [];
     } catch (e) {
-      _error = 'Failed to load featured services: $e';
+      _error = 'Échec du chargement des services en vedette: $e';
       _serviceResults = [];
+      print('❌ Featured services error: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  /// Get distance to provider
-  Future<double?> getDistanceToProvider(ProviderModel provider) async {
-    return await _searchService.getDistanceToProvider(provider);
-  }
-
-  /// Get distance to service
-  Future<double?> getDistanceToService(Service service) async {
-    return await _searchService.getDistanceToService(service);
-  }
-
   /// Format distance for display
-  String formatDistance(double meters) {
-    return _searchService.formatDistance(meters);
+  String formatDistance(double? meters) {
+    if (meters == null) return 'Distance non disponible';
+
+    try {
+      // Manual formatting
+      if (meters < 1000) {
+        return '${meters.toStringAsFixed(0)} m';
+      } else {
+        return '${(meters / 1000).toStringAsFixed(1)} km';
+      }
+    } catch (e) {
+      print('❌ Format distance error: $e');
+      return 'Distance non disponible';
+    }
   }
 
-  /// Get services by provider ID
-  Future<List<Service>> getServicesByProvider(String providerId) async {
+  /// SEARCH WITH FILTERS - CRITICAL METHOD
+  Future<void> searchWithFilters(Map<String, dynamic> filters) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
     try {
-      return await _searchService.getServicesByProvider(providerId);
+      print('🔍 ViewModel: Searching with filters: $filters');
+
+      // Ensure filters use correct field names
+      final Map<String, dynamic> convertedFilters = Map.from(filters);
+
+      // Handle backward compatibility for filter names
+      if (convertedFilters.containsKey('service') &&
+          !convertedFilters.containsKey('category')) {
+        convertedFilters['category'] = convertedFilters['service'];
+      }
+
+      if (convertedFilters.containsKey('subService') &&
+          !convertedFilters.containsKey('subcategory')) {
+        convertedFilters['subcategory'] = convertedFilters['subService'];
+      }
+
+      print('🔍 ViewModel: Using converted filters: $convertedFilters');
+
+      _providerResults =
+          await _searchService.searchProvidersWithFilters(convertedFilters);
+      _serviceResults = [];
+
+      print('✅ ViewModel: Found ${_providerResults.length} providers');
     } catch (e) {
-      _error = 'Failed to get provider services: $e';
+      _error = 'Échec de la recherche avec filtres: $e';
+      _providerResults = [];
+      _serviceResults = [];
+      print('❌❌❌ Filter search error: $e');
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Clear error state
+  void clearError() {
+    _error = null;
+    notifyListeners();
+  }
+
+  /// Check if there are any search results
+  bool get hasResults {
+    return _providerResults.isNotEmpty || _serviceResults.isNotEmpty;
+  }
+
+  /// Get total number of results
+  int get totalResults {
+    return _providerResults.length + _serviceResults.length;
+  }
+
+  /// Get search summary text
+  String get searchSummary {
+    if (_isLoading) return 'Recherche en cours...';
+    if (_error != null) return _error!;
+    if (!hasResults) return 'Aucun résultat trouvé';
+
+    if (_providerResults.isNotEmpty && _serviceResults.isNotEmpty) {
+      return '${_providerResults.length} prestataires et ${_serviceResults.length} services trouvés';
+    } else if (_providerResults.isNotEmpty) {
+      return '${_providerResults.length} prestataire${_providerResults.length > 1 ? 's' : ''} trouvé${_providerResults.length > 1 ? 's' : ''}';
+    } else {
+      return '${_serviceResults.length} service${_serviceResults.length > 1 ? 's' : ''} trouvé${_serviceResults.length > 1 ? 's' : ''}';
+    }
+  }
+
+  /// Get providers by category
+  Future<void> searchProvidersByCategory(String category) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      _providerResults = await _searchService.searchProvidersWithFilters({
+        'category': category,
+      });
+      _serviceResults = [];
+    } catch (e) {
+      _error = 'Échec de la recherche de prestataires par catégorie: $e';
+      _providerResults = [];
+      print('❌ Providers by category error: $e');
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Get available categories for filters
+  Future<Map<String, List<String>>> getAvailableCategories() async {
+    try {
+      return await _searchService.getAvailableCategories();
+    } catch (e) {
+      print('❌ Get categories error: $e');
+      return {};
+    }
+  }
+
+  /// Get available wilayas for filters
+  Future<List<String>> getAvailableWilayas() async {
+    try {
+      return await _searchService.getAvailableWilayas();
+    } catch (e) {
+      print('❌ Get wilayas error: $e');
       return [];
     }
   }

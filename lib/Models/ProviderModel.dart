@@ -1,81 +1,98 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:myapp/models/ServicesModel.dart';
+import 'package:myapp/models/UserModel.dart';
 
 class ProviderModel {
-  String? uid;
-  final String name;
-  final String profession;
-  final String description;
-  final String phone;
-  final String whatsapp;
-  final String? photoUrl;
-  final GeoPoint? location;
-  final String address;
-  final double rating;
-  final bool subscriptionActive;
-  final Timestamp? subscriptionExpires;
-  final DocumentReference userRef;
-  final List<String> services;
+  final UserModel user;
+  Service? primaryService; // Add this to store the main service
 
-  ProviderModel({
-    this.uid,
-    required this.name,
-    required this.profession,
-    required this.description,
-    required this.phone,
-    required this.whatsapp,
-    this.photoUrl,
-    this.location,
-    required this.address,
-    required this.rating,
-    required this.subscriptionActive,
-    this.subscriptionExpires,
-    required this.userRef,
-    required this.services,
-  });
+  ProviderModel({required this.user, this.primaryService});
 
-  factory ProviderModel.fromMap(Map<String, dynamic> map, String docId) {
-    // Safely parse GeoPoint
-    GeoPoint? geoPoint;
-    if (map['location'] is GeoPoint) {
-      geoPoint = map['location'] as GeoPoint;
+  String? get uid => user.uid;
+  String get name => user.name;
+  String get profession => user.profession ?? '';
+  String get phone => user.phone;
+  String get whatsapp => user.phone;
+  String? get photoUrl => user.photoUrl;
+  GeoPoint? get location => user.location;
+  String get address => user.address;
+  double get rating => user.rating;
+  bool get subscriptionActive => user.subscriptionActive;
+  String get email => user.email;
+  List<String> get serviceIds => user.serviceIds;
+  List<String> get chatIds => user.chatIds;
+
+  // Get description from primary service
+  String get description =>
+      primaryService?.description ?? 'No service description available.';
+
+  // These methods extract info from address
+  String get wilaya => _extractWilayaFromAddress(user.address) ?? '';
+  String get commune => _extractCommuneFromAddress(user.address) ?? '';
+
+  String? _extractWilayaFromAddress(String address) {
+    if (address.isEmpty) return null;
+
+    final wilayas = [
+      'Alger',
+      'Boumerdès',
+      'Blida',
+      'Oran',
+      'Tizi Ouzou',
+      'Constantine'
+    ];
+
+    for (var wilaya in wilayas) {
+      if (address.toLowerCase().contains(wilaya.toLowerCase())) {
+        return wilaya;
+      }
     }
 
-    // Safely parse services list
-    final servicesList = map['services'];
-    List<String> services = (servicesList is List)
-        ? List<String>.from(servicesList.map((x) => x.toString()))
-        : [];
+    return null;
+  }
 
-    // Safely parse userRef - handle cases where it might not exist
-    DocumentReference userRef;
-    try {
-      userRef = map['userRef'] as DocumentReference;
-    } catch (e) {
-      // Create a dummy reference or handle appropriately
-      userRef = FirebaseFirestore.instance.collection('users').doc(docId);
+  String? _extractCommuneFromAddress(String address) {
+    if (address.isEmpty) return null;
+
+    final parts = address.split(',');
+    if (parts.isNotEmpty) {
+      return parts.first.trim();
     }
 
-    // Safely parse subscriptionActive
-    bool subscriptionActive = false;
-    if (map['subscriptionActive'] != null) {
-      subscriptionActive = map['subscriptionActive'] == true;
+    return null;
+  }
+
+  // Factory method that also fetches the primary service
+  static Future<ProviderModel> fromUserWithService(UserModel user) async {
+    Service? primaryService;
+
+    if (user.serviceIds.isNotEmpty) {
+      try {
+        final serviceDoc = await FirebaseFirestore.instance
+            .collection('services')
+            .doc(user.serviceIds.first)
+            .get();
+
+        if (serviceDoc.exists) {
+          primaryService = Service.fromMap({
+            ...serviceDoc.data() as Map<String, dynamic>,
+            'id': serviceDoc.id,
+          });
+        }
+      } catch (e) {
+        print('Error fetching service: $e');
+      }
     }
 
-    return ProviderModel(
-      uid: docId,
-      name: map['name'] ?? '',
-      profession: map['profession'] ?? '',
-      description: map['description'] ?? '',
-      phone: map['phone'] ?? '',
-      whatsapp: map['whatsapp'] ?? '',
-      photoUrl: map['photoUrl'],
-      location: geoPoint,
-      address: map['address'] ?? '',
-      rating: (map['rating'] is num) ? (map['rating'] as num).toDouble() : 0.0,
-      subscriptionActive: subscriptionActive,
-      subscriptionExpires: map['subscriptionExpires'] as Timestamp?,
-      userRef: userRef,
-      services: services,
-    );
+    return ProviderModel(user: user, primaryService: primaryService);
+  }
+
+  // Existing factory for backward compatibility
+  factory ProviderModel.fromUser(UserModel user) {
+    return ProviderModel(user: user);
+  }
+
+  Map<String, dynamic> toMap() {
+    return user.toMap();
   }
 }

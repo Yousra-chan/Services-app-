@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:myapp/screens/profile/profile_constants.dart';
+import 'package:myapp/screens/profile/settings/change_password_page.dart';
+import 'package:myapp/screens/profile/settings/update_email_page.dart';
 import 'settings_widgets.dart';
+import 'edit_profile_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -21,7 +24,6 @@ class _SettingsPageState extends State<SettingsPage> {
     return Scaffold(
       backgroundColor: kLightBackgroundColor,
       appBar: AppBar(
-        // Custom App Bar style
         backgroundColor: kPrimaryBlue,
         elevation: 0,
         leading: GestureDetector(
@@ -57,16 +59,19 @@ class _SettingsPageState extends State<SettingsPage> {
                   CupertinoIcons.person_alt_circle_fill,
                   "Edit Profile",
                   false,
+                  onTap: () => _navigateToEditProfile(context),
                 ),
                 buildActionTile(
                   CupertinoIcons.lock_shield_fill,
                   "Change Password",
                   false,
+                  onTap: () => _navigateToChangePassword(context),
                 ),
                 buildActionTile(
                   CupertinoIcons.mail_solid,
                   "Update Email",
-                  true,
+                  false,
+                  onTap: () => _navigateToUpdateEmail(context),
                 ),
               ],
             ),
@@ -75,61 +80,16 @@ class _SettingsPageState extends State<SettingsPage> {
             buildSettingsSectionTitle("GENERAL"),
             buildActionCard(
               children: [
-                buildSwitchTile(
-                  CupertinoIcons.moon_fill,
-                  "Dark Mode",
-                  _darkModeEnabled,
-                  (bool newValue) {
-                    setState(() {
-                      _darkModeEnabled = newValue;
-                    });
-                  },
-                  false,
-                ),
-                buildActionTile(CupertinoIcons.globe, "Language", false),
                 buildActionTile(
-                  CupertinoIcons.gear_alt_fill,
-                  "Advanced Settings",
-                  true,
+                  CupertinoIcons.globe,
+                  "Language",
+                  false,
+                  onTap: () => _showLanguageDialog(context),
                 ),
               ],
             ),
 
-            // --- 3. Privacy Settings Section ---
-            buildSettingsSectionTitle("PRIVACY & DATA"),
-            buildActionCard(
-              children: [
-                buildSwitchTile(
-                  CupertinoIcons.eye_slash_fill,
-                  "Send Read Receipts",
-                  _sendReadReceipts,
-                  (bool newValue) {
-                    setState(() {
-                      _sendReadReceipts = newValue;
-                    });
-                  },
-                  false,
-                ),
-                buildSwitchTile(
-                  CupertinoIcons.power,
-                  "Offline Mode",
-                  _offlineMode,
-                  (bool newValue) {
-                    setState(() {
-                      _offlineMode = newValue;
-                    });
-                  },
-                  false,
-                ),
-                buildActionTile(
-                  CupertinoIcons.delete_solid,
-                  "Clear Cache",
-                  true,
-                ),
-              ],
-            ),
-
-            // --- 4. Danger Zone ---
+            // --- 3. Danger Zone ---
             buildSettingsSectionTitle("DANGER ZONE"),
             buildActionCard(
               children: [
@@ -151,9 +111,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     CupertinoIcons.trash_fill,
                     color: kDangerColor,
                   ),
-                  onTap: () {
-                    // Show confirmation dialog for account deletion
-                  },
+                  onTap: () => _showDeleteAccountDialog(context),
                 ),
               ],
             ),
@@ -161,6 +119,73 @@ class _SettingsPageState extends State<SettingsPage> {
             const SizedBox(height: 40),
           ],
         ),
+      ),
+    );
+  }
+
+  // Navigation Methods
+  void _navigateToEditProfile(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const EditProfilePage()),
+    );
+  }
+
+  void _navigateToChangePassword(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const ChangePasswordPage()),
+    );
+  }
+
+  void _navigateToUpdateEmail(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const UpdateEmailPage()),
+    );
+  }
+
+  void _showLanguageDialog(BuildContext context) {
+    showCupertinoDialog(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: const Text("Select Language"),
+        content: const Text("Language selection will be implemented here."),
+        actions: [
+          CupertinoDialogAction(
+            child: const Text("Cancel"),
+            onPressed: () => Navigator.pop(context),
+          ),
+          CupertinoDialogAction(
+            child: const Text("OK"),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDeleteAccountDialog(BuildContext context) {
+    showCupertinoDialog(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: const Text("Delete Account"),
+        content: const Text(
+            "This action cannot be undone. All your data will be permanently deleted."),
+        actions: [
+          CupertinoDialogAction(
+            child: const Text("Cancel"),
+            onPressed: () => Navigator.pop(context),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            child: const Text("Delete"),
+            onPressed: () {
+              Navigator.pop(context);
+              // Implement account deletion logic
+            },
+          ),
+        ],
       ),
     );
   }

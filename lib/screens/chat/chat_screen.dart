@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart';
+import 'package:flutter/cupertino.dart' hide Widget;
 import 'package:http/http.dart' as http;
 import 'package:myapp/utils/image_utils.dart';
 import 'package:provider/provider.dart';
 import 'package:myapp/ViewModel/chat_view_model.dart';
 import 'package:myapp/models/ChatModel.dart';
 import 'package:myapp/screens/chat/constants.dart';
-import 'package:myapp/screens/chat/disscussion/disscussion_page.dart';
+import 'package:myapp/screens/chat/disscussion/disscussion_page.dart'
+    hide Widget;
 import 'package:intl/intl.dart';
 
 // Add the missing buildAvatar function
@@ -74,7 +75,6 @@ Future<bool> _checkImageValidity(String imageUrl) async {
     }
     return false;
   } catch (e) {
-    print('❌ Image validation error: $e');
     return false;
   }
 }

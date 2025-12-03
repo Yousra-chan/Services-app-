@@ -9,6 +9,18 @@ const Color kMutedTextColor = Color.fromARGB(255, 150, 150, 150);
 const Color kSoftShadowColor = Color.fromARGB(50, 87, 101, 240);
 const Color kSelectedFilterColor = Color.fromARGB(255, 200, 205, 255);
 
+// Additional colors for markers
+const Color kMarkerElectric = Colors.amber;
+const Color kMarkerMedical = Colors.red;
+const Color kMarkerPlumber = Colors.blue;
+const Color kMarkerTeacher = Colors.green;
+const Color kMarkerHandyman = Colors.orange;
+const Color kMarkerCleaning = Colors.lightBlue;
+const Color kMarkerCarpenter = Colors.brown;
+const Color kMarkerPainter = Colors.purple;
+const Color kMarkerGardener = Colors.lightGreen;
+const Color kMarkerMover = Colors.deepOrange;
+
 // --- Data Models ---
 class FilterOption {
   final String label;

@@ -19,6 +19,8 @@ class NotificationItem {
   final String actionText;
   final bool isRead;
   final DateTime time;
+  final int messageCount; // ADDED
+  final DateTime lastMessageTime; // ADDED
 
   NotificationItem({
     required this.id,
@@ -31,6 +33,8 @@ class NotificationItem {
     this.actionText = '',
     required this.isRead,
     required this.time,
+    this.messageCount = 1, // ADDED with default value
+    required this.lastMessageTime, // ADDED
   });
 
   factory NotificationItem.fromFirestore(DocumentSnapshot doc) {
@@ -46,6 +50,10 @@ class NotificationItem {
       actionText: data['actionText'] ?? '',
       isRead: data['isRead'] ?? false,
       time: (data['time'] as Timestamp).toDate(),
+      messageCount: (data['messageCount'] as num?)?.toInt() ?? 1, // ADDED
+      lastMessageTime: data['lastMessageTime'] != null // ADDED
+          ? (data['lastMessageTime'] as Timestamp).toDate()
+          : (data['time'] as Timestamp).toDate(),
     );
   }
 
@@ -63,6 +71,20 @@ class NotificationItem {
       default:
         return NotificationType.system;
     }
+  }
+
+  // ADDED: Getter for formatted title with message count
+  String get formattedTitle {
+    if (type == NotificationType.message && messageCount > 1) {
+      return title.replaceAllMapped(
+        RegExp(r'New message from (.*?)( \(\d+ new\))?'),
+        (match) {
+          final sender = match[1] ?? '';
+          return 'New message from $sender ($messageCount new)';
+        },
+      );
+    }
+    return title;
   }
 
   IconData get icon {
@@ -109,14 +131,50 @@ class FirebaseService {
     });
   }
 
-  static Future<void> markNotificationAsRead(String notificationId) async {
+  // UPDATED: Mark notification as read AND delete it
+  static Future<void> markNotificationAsRead(String notificationId,
+      {bool deleteAfterRead = true}) async {
     try {
-      await FirebaseFirestore.instance
-          .collection('notifications')
-          .doc(notificationId)
-          .update({'isRead': true});
+      if (deleteAfterRead) {
+        // Delete the notification when clicked
+        await FirebaseFirestore.instance
+            .collection('notifications')
+            .doc(notificationId)
+            .delete();
+        print('🗑️ Notification deleted: $notificationId');
+      } else {
+        // Or just mark as read (if you want to keep history)
+        await FirebaseFirestore.instance
+            .collection('notifications')
+            .doc(notificationId)
+            .update({'isRead': true});
+        print('✅ Notification marked as read: $notificationId');
+      }
     } catch (e) {
-      print('Error marking notification as read: $e');
+      print('Error handling notification: $e');
+    }
+  }
+
+  // ADDED: Delete all notifications for a specific chat
+  static Future<void> deleteNotificationsForChat(
+      String userId, String chatId) async {
+    try {
+      final notifications = await FirebaseFirestore.instance
+          .collection('notifications')
+          .where('userId', isEqualTo: userId)
+          .where('chatId', isEqualTo: chatId)
+          .where('isRead', isEqualTo: false)
+          .get();
+
+      final batch = FirebaseFirestore.instance.batch();
+      for (final doc in notifications.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+      print(
+          '🗑️ Deleted ${notifications.docs.length} notifications for chat: $chatId');
+    } catch (e) {
+      print('Error deleting notifications for chat: $e');
     }
   }
 
@@ -129,6 +187,8 @@ class FirebaseService {
     String? senderId,
     String? senderName,
     String actionText = '',
+    int messageCount = 1, // ADDED
+    DateTime? lastMessageTime, // ADDED
   }) async {
     try {
       await FirebaseFirestore.instance.collection('notifications').add({
@@ -142,6 +202,10 @@ class FirebaseService {
         'actionText': actionText,
         'isRead': false,
         'time': FieldValue.serverTimestamp(),
+        'messageCount': messageCount, // ADDED
+        'lastMessageTime': lastMessageTime != null // ADDED
+            ? Timestamp.fromDate(lastMessageTime)
+            : FieldValue.serverTimestamp(),
       });
       print('✅ Notification created for user: $userId');
     } catch (e) {

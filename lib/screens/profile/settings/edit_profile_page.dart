@@ -3,7 +3,7 @@ import 'package:myapp/ViewModel/auth_view_model.dart';
 import 'package:provider/provider.dart';
 import 'package:myapp/models/UserModel.dart';
 import 'package:myapp/screens/profile/profile_constants.dart';
-import 'dart:convert'; // ⬅️ NEW: Required for Base64 decoding
+import 'dart:convert';
 
 class EditProfilePage extends StatefulWidget {
   const EditProfilePage({super.key});

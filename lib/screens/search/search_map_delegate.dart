@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:myapp/services/search_service.dart';
-import 'package:myapp/models/UserModel.dart';
+import 'package:myapp/ViewModel/search_view_model.dart';
+import 'package:provider/provider.dart';
 import 'package:myapp/models/ProviderModel.dart';
 import 'search_constants.dart';
 
 class CustomServiceSearchDelegate extends SearchDelegate<String> {
+  final SearchViewModel _searchViewModel;
+
+  CustomServiceSearchDelegate() : _searchViewModel = SearchViewModel();
+
   @override
   ThemeData appBarTheme(BuildContext context) {
     final ThemeData theme = Theme.of(context);
@@ -59,40 +63,46 @@ class CustomServiceSearchDelegate extends SearchDelegate<String> {
 
   @override
   Widget buildResults(BuildContext context) {
-    if (query.isEmpty) {
-      return _buildEmptyState(
-        context,
-        "Type a service or provider name to search",
-      );
-    }
+    return ChangeNotifierProvider.value(
+      value: _searchViewModel,
+      child: Consumer<SearchViewModel>(
+        builder: (context, viewModel, child) {
+          if (query.isEmpty) {
+            return _buildEmptyState(
+              context,
+              "Type a service or provider name to search",
+            );
+          }
 
-    return _buildSearchResults(context);
+          // Trigger search when query changes
+          if (viewModel.providerResults.isEmpty && !viewModel.isLoading) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              viewModel.searchProvidersOnly(query);
+            });
+          }
+
+          return _buildSearchResults(context, viewModel);
+        },
+      ),
+    );
   }
 
-  Widget _buildSearchResults(BuildContext context) {
-    return FutureBuilder<List<ProviderModel>>(
-      future: SearchService().searchProvidersByProfessionOrName(query),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return _buildLoadingState(context);
-        }
+  Widget _buildSearchResults(BuildContext context, SearchViewModel viewModel) {
+    if (viewModel.isLoading) {
+      return _buildLoadingState(context);
+    }
 
-        if (snapshot.hasError) {
-          return _buildEmptyState(
-            context,
-            "Error searching: ${snapshot.error}",
-          );
-        }
+    if (viewModel.error != null) {
+      return _buildEmptyState(context, viewModel.error!);
+    }
 
-        final providers = snapshot.data ?? [];
+    final providers = viewModel.providerResults;
 
-        if (providers.isEmpty) {
-          return _buildEmptyState(context, "No providers found for '$query'");
-        }
+    if (providers.isEmpty) {
+      return _buildEmptyState(context, "No providers found for '$query'");
+    }
 
-        return _buildProvidersList(context, providers, "Search Results");
-      },
-    );
+    return _buildProvidersList(context, providers, "Search Results");
   }
 
   Widget _buildProvidersList(
@@ -176,7 +186,7 @@ class CustomServiceSearchDelegate extends SearchDelegate<String> {
               ),
             ),
             const SizedBox(height: 6),
-            if (provider.address.isNotEmpty)
+            if (provider.wilaya.isNotEmpty || provider.commune.isNotEmpty)
               Row(
                 children: [
                   Icon(
@@ -187,7 +197,7 @@ class CustomServiceSearchDelegate extends SearchDelegate<String> {
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
-                      provider.address,
+                      '${provider.commune.isNotEmpty ? '${provider.commune}, ' : ''}${provider.wilaya}',
                       style: TextStyle(
                         color: kMutedTextColor,
                         fontSize: 12,
@@ -460,8 +470,29 @@ class CustomServiceSearchDelegate extends SearchDelegate<String> {
     } else if (lowerProfession.contains('handyman') ||
         lowerProfession.contains('repair')) {
       return CupertinoIcons.wrench_fill;
+    } else if (lowerProfession.contains('clean') ||
+        lowerProfession.contains('nettoy')) {
+      return CupertinoIcons.house_fill;
+    } else if (lowerProfession.contains('carpent') ||
+        lowerProfession.contains('menuis')) {
+      return CupertinoIcons.hammer_fill;
+    } else if (lowerProfession.contains('paint') ||
+        lowerProfession.contains('peint')) {
+      return CupertinoIcons.paintbrush_fill;
+    } else if (lowerProfession.contains('garden') ||
+        lowerProfession.contains('jardin')) {
+      return CupertinoIcons.clear_fill;
+    } else if (lowerProfession.contains('move') ||
+        lowerProfession.contains('déménag')) {
+      return CupertinoIcons.car_fill;
     } else {
       return CupertinoIcons.person_fill;
     }
+  }
+
+  @override
+  void dispose() {
+    _searchViewModel.clearResults();
+    super.dispose();
   }
 }

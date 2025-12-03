@@ -16,8 +16,7 @@ class ProviderService {
           .get();
 
       return querySnapshot.docs.map((doc) {
-        final user =
-            UserModel.fromMap(doc.data() as Map<String, dynamic>, doc.id);
+        final user = UserModel.fromMap(doc.data(), doc.id);
         return ProviderModel.fromUser(user);
       }).toList();
     } catch (e) {
@@ -83,8 +82,7 @@ class ProviderService {
           .get();
 
       return querySnapshot.docs.map((doc) {
-        final user =
-            UserModel.fromMap(doc.data() as Map<String, dynamic>, doc.id);
+        final user = UserModel.fromMap(doc.data(), doc.id);
         return ProviderModel.fromUser(user);
       }).toList();
     } catch (e) {
@@ -103,8 +101,7 @@ class ProviderService {
           .get();
 
       return querySnapshot.docs.map((doc) {
-        final user =
-            UserModel.fromMap(doc.data() as Map<String, dynamic>, doc.id);
+        final user = UserModel.fromMap(doc.data(), doc.id);
         return ProviderModel.fromUser(user);
       }).toList();
     } catch (e) {

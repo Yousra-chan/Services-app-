@@ -101,7 +101,7 @@ class FirestoreService {
       return {};
     } catch (e) {
       print('Error getting user stats: $e');
-      throw e;
+      rethrow;
     }
   }
 
@@ -114,7 +114,7 @@ class FirestoreService {
       });
     } catch (e) {
       print('Error updating user address: $e');
-      throw e;
+      rethrow;
     }
   }
 
@@ -125,7 +125,7 @@ class FirestoreService {
       return doc.data() as Map<String, dynamic>?;
     } catch (e) {
       print('Error getting user profile: $e');
-      throw e;
+      rethrow;
     }
   }
 
@@ -138,7 +138,7 @@ class FirestoreService {
       });
     } catch (e) {
       print('Error updating user role: $e');
-      throw e;
+      rethrow;
     }
   }
 
@@ -158,7 +158,7 @@ class FirestoreService {
       }).toList();
     } catch (e) {
       print('Error getting provider services: $e');
-      throw e;
+      rethrow;
     }
   }
 
@@ -174,7 +174,7 @@ class FirestoreService {
       });
     } catch (e) {
       print('Error adding service: $e');
-      throw e;
+      rethrow;
     }
   }
 
@@ -188,7 +188,7 @@ class FirestoreService {
       });
     } catch (e) {
       print('Error updating service: $e');
-      throw e;
+      rethrow;
     }
   }
 
@@ -198,7 +198,7 @@ class FirestoreService {
       await _servicesCollection.doc(serviceId).delete();
     } catch (e) {
       print('Error deleting service: $e');
-      throw e;
+      rethrow;
     }
   }
 
@@ -212,7 +212,7 @@ class FirestoreService {
       }, SetOptions(merge: true));
     } catch (e) {
       print('Error creating/updating user profile: $e');
-      throw e;
+      rethrow;
     }
   }
 }

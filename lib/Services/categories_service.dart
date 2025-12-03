@@ -5,33 +5,35 @@ import 'package:myapp/models/CategoryModel.dart';
 class CategoriesService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // Get all available categories (defaults + Firestore data)
+  // Get all categories from Firestore services
   Future<List<CategoryModel>> getAllCategories() async {
     try {
-      // Get services from Firestore
-      final servicesSnapshot = await _firestore.collection('services').get();
+      // Get all active services from Firestore
+      final servicesSnapshot = await _firestore
+          .collection('services')
+          .where('isActive', isEqualTo: true)
+          .get();
 
-      // Start with default categories
-      final categories = CategoryModel.defaultCategories;
+      // Map to store categories and their subcategories
+      final categoryMap = <String, Map<String, SubcategoryModel>>{};
 
-      // Process Firestore services to find unique categories
-      final firestoreCategories = <String, Map<String, SubcategoryModel>>{};
-
+      // Process services to extract categories and subcategories
       for (var doc in servicesSnapshot.docs) {
         final data = doc.data();
-        final serviceCategory = data['category']?.toString()?.trim() ?? '';
-        final serviceSubcategory =
-            data['subcategory']?.toString()?.trim() ?? '';
+        final serviceCategory = data['category']?.toString().trim() ?? '';
+        final serviceSubcategory = data['subcategory']?.toString().trim() ?? '';
 
         if (serviceCategory.isNotEmpty) {
-          firestoreCategories[serviceCategory] ??= {};
+          // Initialize category if not exists
+          categoryMap[serviceCategory] ??= {};
 
+          // Add subcategory if exists
           if (serviceSubcategory.isNotEmpty) {
-            firestoreCategories[serviceCategory]![serviceSubcategory] =
+            categoryMap[serviceCategory]![serviceSubcategory] =
                 SubcategoryModel(
-              id: '${serviceCategory}_$serviceSubcategory',
+              id: '${serviceCategory}_$serviceSubcategory'.replaceAll(' ', '_'),
               name: serviceSubcategory,
-              description: 'Service in $serviceCategory',
+              description: '$serviceSubcategory under $serviceCategory',
               icon: CupertinoIcons.circle_fill,
               iconCode: 'circle_fill',
             );
@@ -39,44 +41,50 @@ class CategoriesService {
         }
       }
 
-      // Merge Firestore categories with defaults
+      // Convert map to CategoryModel list
+      final categories = <CategoryModel>[];
+      categoryMap.forEach((categoryName, subcategoriesMap) {
+        categories.add(CategoryModel(
+          id: categoryName.toLowerCase().replaceAll(' ', '_'),
+          name: categoryName,
+          description: '$categoryName Services',
+          icon: CategoryModel.getIconFromCode(categoryName.toLowerCase()),
+          iconCode: categoryName.toLowerCase(),
+          subcategories: subcategoriesMap.values.toList(),
+        ));
+      });
+
+      // Merge with default categories
+      final defaultCategories = CategoryModel.defaultCategories;
       final mergedCategories = <CategoryModel>[];
 
-      // Add all default categories
-      mergedCategories.addAll(categories);
-
-      // Add new categories from Firestore that aren't in defaults
-      for (var entry in firestoreCategories.entries) {
-        final categoryName = entry.key;
-        final subcategoriesMap = entry.value;
-
-        final existingCategory = categories.firstWhere(
-          (cat) => cat.name.toLowerCase() == categoryName.toLowerCase(),
-          orElse: () => CategoryModel(
-            id: categoryName.toLowerCase(),
-            name: categoryName,
-            description: '$categoryName Services',
-            icon: CupertinoIcons.circle_fill,
-            iconCode: categoryName.toLowerCase(),
-            subcategories: [],
-          ),
+      // Add all default categories first
+      for (var defaultCat in defaultCategories) {
+        final existingCat = categories.firstWhere(
+          (cat) => cat.name.toLowerCase() == defaultCat.name.toLowerCase(),
+          orElse: () => defaultCat,
         );
 
-        // Add to merged list if not already present
-        if (!mergedCategories.any((cat) => cat.name == categoryName)) {
-          mergedCategories.add(existingCategory);
+        // Merge subcategories
+        final defaultSubs = defaultCat.subcategories.map((e) => e.name).toSet();
+        final existingSubs =
+            existingCat.subcategories.map((e) => e.name).toSet();
+
+        if (defaultSubs.isNotEmpty) {
+          for (var sub in defaultCat.subcategories) {
+            if (!existingSubs.contains(sub.name)) {
+              existingCat.subcategories.add(sub);
+            }
+          }
         }
 
-        // Add subcategories
-        for (var subEntry in subcategoriesMap.entries) {
-          final subcategoryName = subEntry.key;
-          final subcategoryModel = subEntry.value;
+        mergedCategories.add(existingCat);
+      }
 
-          // Check if subcategory already exists
-          if (!existingCategory.subcategories
-              .any((sub) => sub.name == subcategoryName)) {
-            existingCategory.subcategories.add(subcategoryModel);
-          }
+      // Add categories from Firestore not in defaults
+      for (var firestoreCat in categories) {
+        if (!mergedCategories.any((cat) => cat.name == firestoreCat.name)) {
+          mergedCategories.add(firestoreCat);
         }
       }
 
@@ -90,7 +98,6 @@ class CategoriesService {
   // Get categories as map for dropdowns
   Future<Map<String, List<String>>> getCategoriesForFilter() async {
     final categories = await getAllCategories();
-
     final result = <String, List<String>>{};
 
     for (var category in categories) {
@@ -101,16 +108,29 @@ class CategoriesService {
     return result;
   }
 
-  // In categories_service.dart
-// Get category by name - SIMPLE VERSION
+  // Get category by name
   CategoryModel? getCategoryByName(String name) {
     try {
-      // Search in default categories
-      return CategoryModel.defaultCategories.firstWhere(
-        (category) => category.name.toLowerCase() == name.toLowerCase(),
+      final defaultCategories = CategoryModel.defaultCategories;
+      final lowerName = name.toLowerCase();
+
+      for (var category in defaultCategories) {
+        if (category.name.toLowerCase() == lowerName) {
+          return category;
+        }
+      }
+
+      // If not found, create a simple category
+      return CategoryModel(
+        id: lowerName.replaceAll(' ', '_'),
+        name: name,
+        description: '$name Services',
+        icon: CupertinoIcons.circle_fill,
+        iconCode: 'circle_fill',
+        subcategories: [],
       );
     } catch (e) {
-      print('Category "$name" not found in default categories');
+      print('❌ Error in getCategoryByName for "$name": $e');
       return null;
     }
   }
@@ -118,13 +138,13 @@ class CategoriesService {
   // Get subcategory by name within a category
   Future<SubcategoryModel?> getSubcategoryByName(
       String categoryName, String subcategoryName) async {
-    final category = await getCategoryByName(categoryName);
+    final category = getCategoryByName(categoryName);
     if (category == null) return null;
 
     return category.subcategories.firstWhere(
       (sub) => sub.name.toLowerCase() == subcategoryName.toLowerCase(),
       orElse: () => SubcategoryModel(
-        id: '${categoryName}_$subcategoryName',
+        id: '${categoryName}_$subcategoryName'.replaceAll(' ', '_'),
         name: subcategoryName,
         description: '$subcategoryName under $categoryName',
         icon: CupertinoIcons.circle_fill,

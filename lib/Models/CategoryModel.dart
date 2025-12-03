@@ -23,7 +23,7 @@ class SubcategoryModel {
       id: id,
       name: map['name'] ?? '',
       description: map['description'] ?? '',
-      icon: CategoryModel._getIconFromCode(map['iconCode'] ?? ''),
+      icon: CategoryModel.getIconFromCode(map['iconCode'] ?? ''),
       iconCode: map['iconCode'] ?? '',
       isActive: map['isActive'] ?? true,
     );
@@ -62,8 +62,6 @@ class CategoryModel {
     required this.subcategories,
   });
 
-  // ... (keep your existing fromFirestore, fromMap, _getIconFromCode, toMap methods)
-
   static List<CategoryModel> get defaultCategories {
     return [
       CategoryModel(
@@ -75,7 +73,7 @@ class CategoryModel {
         subcategories: [
           SubcategoryModel(
             id: '1-1',
-            name: 'House Cleaning',
+            name: 'Home Cleaning',
             description: 'General house cleaning services',
             icon: CupertinoIcons.house_fill,
             iconCode: 'house_fill',
@@ -371,7 +369,7 @@ class CategoryModel {
       description: data['description'] ?? '',
       iconUrl: data['iconUrl'],
       createdAt: data['createdAt'],
-      icon: _getIconFromCode(data['iconCode'] ?? ''),
+      icon: getIconFromCode(data['iconCode'] ?? ''),
       iconCode: data['iconCode'] ?? '',
       isActive: data['isActive'] ?? true,
       subcategories: [],
@@ -385,14 +383,14 @@ class CategoryModel {
       description: map['description'] ?? '',
       iconUrl: map['iconUrl'],
       createdAt: map['createdAt'],
-      icon: _getIconFromCode(map['iconCode'] ?? ''),
+      icon: getIconFromCode(map['iconCode'] ?? ''),
       iconCode: map['iconCode'] ?? '',
       isActive: map['isActive'] ?? true,
       subcategories: [],
     );
   }
 
-  static IconData _getIconFromCode(String iconCode) {
+  static IconData getIconFromCode(String iconCode) {
     switch (iconCode) {
       case 'house_fill':
         return CupertinoIcons.house_fill;

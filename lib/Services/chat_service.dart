@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:myapp/Services/notification_service.dart';
 import '../models/ChatModel.dart';
 import '../models/MessageModel.dart';
 import 'firebase_service.dart';
@@ -21,13 +22,11 @@ class ChatService {
 
   // === CRÉATION ET RÉCUPÉRATION DES CHATS ===
 
-// In chat_service.dart - Update createChat method to prevent self-chats
   Future<String?> createChat({
     required String clientId,
     required String providerId,
   }) async {
     try {
-      // Prevent self-chatting
       if (clientId == providerId) {
         throw Exception(
             'Vous ne pouvez pas créer une discussion avec vous-même');
@@ -81,7 +80,6 @@ class ChatService {
 
       return chatId;
     } catch (e) {
-      print('Error creating chat: $e');
       rethrow;
     }
   }
@@ -104,15 +102,13 @@ class ChatService {
         return ChatModel.fromDoc(doc);
       }
       return null;
-    } catch (e) {
-      print('Error getting chat: $e');
+    } catch (_) {
       return null;
     }
   }
 
   // === GESTION DES MESSAGES ===
 
-// In chat_service.dart - Update sendMessage method
   Future<void> sendMessage(String chatId, MessageModel message) async {
     final chatDocRef = _chatsRef.doc(chatId);
     final messagesRef = chatDocRef.collection('messages');
@@ -126,7 +122,6 @@ class ChatService {
         List<String>.from(chatDoc.data()?['participants'] ?? []);
     final otherUserId = participants.firstWhere((id) => id != message.senderId);
 
-    // Get participant names for notification
     final participantNames = chatDoc.data()?['participantNames'] ?? {};
     final senderName = participantNames[message.senderId] ?? 'Someone';
     final receiverName = participantNames[otherUserId] ?? 'User';
@@ -149,26 +144,51 @@ class ChatService {
       });
     });
 
-    // ✅ ADD THIS: Create notification for the receiver
     try {
-      await FirebaseService.createNotification(
-        userId: otherUserId,
-        title: 'New Message from $senderName',
-        message: message.text.length > 50
-            ? '${message.text.substring(0, 50)}...'
-            : message.text,
-        type: 'message',
+      await NotificationService.createMessageNotification(
+        receiverId: otherUserId,
+        senderName: senderName,
+        messageText: message.text,
         chatId: chatId,
         senderId: message.senderId,
-        senderName: senderName,
-        actionText: 'Reply',
       );
-      print('📬 Notification created for user: $otherUserId');
-    } catch (e) {
-      print('❌ Error creating notification: $e');
+    } catch (_) {
+      try {
+        await FirebaseService.createNotification(
+          userId: otherUserId,
+          title: 'New Message from $senderName',
+          message: message.text.length > 50
+              ? '${message.text.substring(0, 50)}...'
+              : message.text,
+          type: 'message',
+          chatId: chatId,
+          senderId: message.senderId,
+          senderName: senderName,
+          actionText: 'Reply',
+        );
+      } catch (_) {}
     }
+  }
 
-    print('Message envoyé avec succès dans le chat $chatId');
+  Future<bool> testNotificationConnection() async {
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) {
+        return false;
+      }
+
+      await NotificationService.createMessageNotification(
+        receiverId: currentUser.uid,
+        senderName: 'Test System',
+        messageText: 'Test notification from chat service',
+        chatId: 'test_chat_${DateTime.now().millisecondsSinceEpoch}',
+        senderId: 'test_system',
+      );
+
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> testNotification(String chatId, String currentUserId) async {
@@ -181,10 +201,7 @@ class ChatService {
       );
 
       await sendMessage(chatId, testMessage);
-      print('✅ Test message and notification sent');
-    } catch (e) {
-      print('❌ Test failed: $e');
-    }
+    } catch (_) {}
   }
 
   Stream<List<MessageModel>> listenMessages(
@@ -236,11 +253,8 @@ class ChatService {
 
         batch.update(chatRef, {'unreadCount.$userId': 0});
         await batch.commit();
-        print('${unreadMessages.length} messages marqués comme lus');
       }
-    } catch (e) {
-      print('Error marking messages as read: $e');
-    }
+    } catch (_) {}
   }
 
   // === COMPTEURS ET STATUTS ===
@@ -272,12 +286,8 @@ class ChatService {
     });
   }
 
-  // In chat_service.dart - Update getAvailableProviders method
   Future<List<Map<String, dynamic>>> getAvailableProviders() async {
     try {
-      print('🔍 Fetching available providers...');
-
-      // Get current user ID
       final currentUser = FirebaseAuth.instance.currentUser;
       final currentUserId = currentUser?.uid;
 
@@ -285,16 +295,11 @@ class ChatService {
         throw Exception('User not authenticated');
       }
 
-      // First try to get users with provider role
       final providerQuery =
           await _usersRef.where('role', isEqualTo: 'provider').limit(20).get();
 
-      print('📊 Found ${providerQuery.docs.length} providers with role filter');
-
-      // Filter out current user and map to list
-      final providers = providerQuery.docs
-          .where((doc) => doc.id != currentUserId) // Exclude current user
-          .map((doc) {
+      final providers =
+          providerQuery.docs.where((doc) => doc.id != currentUserId).map((doc) {
         final data = doc.data();
         return {
           'id': doc.id,
@@ -309,13 +314,10 @@ class ChatService {
         return providers;
       }
 
-      // If no providers found, get all users and exclude current user
-      print('🔄 No providers found with role, fetching all users...');
       final allUsers = await _usersRef.limit(20).get();
 
-      final potentialProviders = allUsers.docs
-          .where((doc) => doc.id != currentUserId) // Exclude current user
-          .where((doc) {
+      final potentialProviders =
+          allUsers.docs.where((doc) => doc.id != currentUserId).where((doc) {
         final data = doc.data();
         return data['name']?.isNotEmpty == true ||
             data['email']?.isNotEmpty == true;
@@ -330,16 +332,12 @@ class ChatService {
         };
       }).toList();
 
-      print(
-          '👥 Found ${potentialProviders.length} potential providers (excluding self)');
       return potentialProviders;
-    } catch (e) {
-      print('❌ Error getting providers: $e');
+    } catch (_) {
       return [];
     }
   }
 
-  // Alternative si pas de champ 'role'
   Future<List<Map<String, dynamic>>> getAllUsers() async {
     try {
       final querySnapshot = await _usersRef.limit(10).get();
@@ -354,8 +352,7 @@ class ChatService {
           'role': data['role'] ?? 'user',
         };
       }).toList();
-    } catch (e) {
-      print('Error getting users: $e');
+    } catch (_) {
       return [];
     }
   }
@@ -371,10 +368,7 @@ class ChatService {
       await _usersRef.doc(userId).update({
         'chatIds': FieldValue.arrayRemove([chatId]),
       });
-
-      print('Chat $chatId supprimé pour l\'utilisateur $userId');
     } catch (e) {
-      print('Error deleting chat: $e');
       rethrow;
     }
   }

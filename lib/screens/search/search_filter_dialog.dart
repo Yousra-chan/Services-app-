@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'search_constants.dart';
 import 'package:myapp/services/wilaya_service.dart';
 import 'package:myapp/services/categories_service.dart';
-import 'package:myapp/models/CategoryModel.dart';
-import 'search_constants.dart';
+import 'package:myapp/services/geocoding_service.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 class SearchFilterDialog extends StatefulWidget {
   final Function(Map<String, dynamic>) onFiltersApplied;
@@ -12,12 +13,12 @@ class SearchFilterDialog extends StatefulWidget {
   final String? initialSubcategory;
 
   const SearchFilterDialog({
-    Key? key,
+    super.key,
     required this.onFiltersApplied,
     this.initialWilaya,
     this.initialCategory,
     this.initialSubcategory,
-  }) : super(key: key);
+  });
 
   @override
   State<SearchFilterDialog> createState() => _SearchFilterDialogState();
@@ -31,53 +32,56 @@ class _SearchFilterDialogState extends State<SearchFilterDialog> {
   double _selectedDistance = 20.0;
   bool _useDistanceFilter = false;
 
-  List<String> _wilayas = WilayaService.getAllWilayaNames();
-  List<String> _communes = [];
-  List<CategoryModel> _allCategories = [];
-  List<String> _availableSubcategories = [];
-  bool _isLoading = false;
-
+  // Services
   final CategoriesService _categoriesService = CategoriesService();
+
+  // Data
+  List<String> _wilayas = [];
+  List<String> _communes = [];
+  Map<String, List<String>> _categoriesWithSubcategories = {};
+  List<String> _categories = [];
+  List<String> _availableSubcategories = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _selectedWilaya = widget.initialWilaya;
-    _selectedCategory = widget.initialCategory;
-    _selectedSubcategory = widget.initialSubcategory;
-
-    if (_selectedWilaya != null) {
-      _communes = WilayaService.getCommunesForWilaya(_selectedWilaya!);
-    }
-
-    _loadCategoriesData();
+    _loadData();
   }
 
-  Future<void> _loadCategoriesData() async {
+  Future<void> _loadData() async {
     try {
       setState(() {
         _isLoading = true;
       });
 
-      final categories = await _categoriesService.getAllCategories();
+      // Load wilayas
+      _wilayas = WilayaService.getAllWilayaNames();
 
-      setState(() {
-        _allCategories = categories;
-        _isLoading = false;
-      });
+      // Load categories
+      _categoriesWithSubcategories =
+          await _categoriesService.getCategoriesForFilter();
+      _categories = _categoriesWithSubcategories.keys.toList()..sort();
 
-      print("✅ Loaded ${categories.length} categories");
+      // Set initial values
+      _selectedWilaya = widget.initialWilaya;
+      _selectedCategory = widget.initialCategory;
+      _selectedSubcategory = widget.initialSubcategory;
 
-      // Update subcategories if category is already selected
+      // Load communes if wilaya is selected
+      if (_selectedWilaya != null) {
+        _communes = WilayaService.getCommunesForWilaya(_selectedWilaya!);
+      }
+
+      // Update subcategories if category is selected
       if (_selectedCategory != null) {
         _updateAvailableSubcategories();
       }
     } catch (e) {
-      print("❌ Error loading categories: $e");
+      print('Error loading filter data: $e');
+    } finally {
       setState(() {
         _isLoading = false;
-        // Load default categories as fallback
-        _allCategories = CategoryModel.defaultCategories;
       });
     }
   }
@@ -91,25 +95,16 @@ class _SearchFilterDialogState extends State<SearchFilterDialog> {
       return;
     }
 
-    final category = _categoriesService.getCategoryByName(_selectedCategory!);
+    setState(() {
+      _availableSubcategories =
+          _categoriesWithSubcategories[_selectedCategory!] ?? [];
 
-    if (category != null) {
-      setState(() {
-        _availableSubcategories =
-            category.subcategories.map((sub) => sub.name).toList();
-
-        // Reset subcategory if not in new list
-        if (_selectedSubcategory != null &&
-            !_availableSubcategories.contains(_selectedSubcategory)) {
-          _selectedSubcategory = null;
-        }
-      });
-    } else {
-      setState(() {
-        _availableSubcategories = [];
+      // Reset subcategory if not in new list
+      if (_selectedSubcategory != null &&
+          !_availableSubcategories.contains(_selectedSubcategory)) {
         _selectedSubcategory = null;
-      });
-    }
+      }
+    });
   }
 
   // Helper method to get icon for category name
@@ -125,549 +120,558 @@ class _SearchFilterDialogState extends State<SearchFilterDialog> {
     if (lowerName.contains('move')) return CupertinoIcons.car_fill;
     if (lowerName.contains('repair')) return CupertinoIcons.wrench_fill;
     if (lowerName.contains('install')) return CupertinoIcons.settings;
-    if (lowerName.contains('tutor')) return CupertinoIcons.book_fill;
-    if (lowerName.contains('teach')) return CupertinoIcons.person_fill;
-    if (lowerName.contains('doctor')) return CupertinoIcons.heart_fill;
     if (lowerName.contains('medical')) return CupertinoIcons.heart_fill;
-    if (lowerName.contains('hair')) return CupertinoIcons.scissors;
-    if (lowerName.contains('beauty')) return CupertinoIcons.sparkles;
+    if (lowerName.contains('teach')) return CupertinoIcons.book_fill;
 
     return CupertinoIcons.circle_fill;
   }
 
+  // Update this method to use GeocodingService.getWilayaCoordinates()
+  Future<LatLng?> _getWilayaCoordinates(String wilayaName) async {
+    try {
+      return await GeocodingService.getWilayaCoordinates(wilayaName);
+    } catch (e) {
+      print('Error getting coordinates for $wilayaName: $e');
+      return null;
+    }
+  }
+
   Widget _buildHeader() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          'Filtrer la recherche',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            fontFamily: 'Exo2',
-            color: kDarkTextColor,
+    return Container(
+      padding: EdgeInsets.only(bottom: 20),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(
+            color: kMutedTextColor.withOpacity(0.2),
+            width: 1,
           ),
         ),
-        IconButton(
-          icon: Icon(CupertinoIcons.xmark, size: 24),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Filtrer les résultats',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  fontFamily: 'Exo2',
+                  color: kDarkTextColor,
+                ),
+              ),
+              SizedBox(height: 4),
+              Text(
+                'Sélectionnez vos critères de recherche',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontFamily: 'Exo2',
+                  color: kMutedTextColor,
+                ),
+              ),
+            ],
+          ),
+          IconButton(
+            icon: Container(
+              padding: EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: kLightBackgroundColor,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(CupertinoIcons.xmark, size: 20),
+            ),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildWilayaFilter() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Wilaya',
-          style: TextStyle(
-            fontWeight: FontWeight.w600,
-            fontFamily: 'Exo2',
-            color: kDarkTextColor,
-          ),
-        ),
-        SizedBox(height: 8),
-        Container(
-          width: double.infinity,
-          padding: EdgeInsets.symmetric(horizontal: 15),
-          decoration: BoxDecoration(
-            color: kLightBackgroundColor,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: kMutedTextColor.withOpacity(0.3)),
-          ),
-          child: DropdownButton<String>(
-            value: _selectedWilaya,
-            isExpanded: true,
-            underline: SizedBox(),
-            icon: Icon(Icons.arrow_drop_down, color: kPrimaryBlue),
-            hint: Text(
-              'Sélectionnez une wilaya',
-              style: TextStyle(color: kMutedTextColor),
-            ),
-            items: _wilayas.map((wilaya) {
-              return DropdownMenuItem<String>(
-                value: wilaya,
-                child: Text(
-                  wilaya,
+  Widget _buildCategorySection() {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(15),
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.category_outlined, color: kPrimaryBlue, size: 20),
+                SizedBox(width: 8),
+                Text(
+                  'Catégorie principale',
                   style: TextStyle(
                     fontSize: 16,
+                    fontWeight: FontWeight.w600,
                     fontFamily: 'Exo2',
+                    color: kDarkTextColor,
                   ),
                 ),
-              );
-            }).toList(),
-            onChanged: (value) {
-              setState(() {
-                _selectedWilaya = value;
-                _communes = WilayaService.getCommunesForWilaya(value!);
-                _selectedCommune = null;
-              });
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCommuneFilter() {
-    if (_selectedWilaya == null) return SizedBox();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(height: 15),
-        Text(
-          'Commune',
-          style: TextStyle(
-            fontWeight: FontWeight.w600,
-            fontFamily: 'Exo2',
-            color: kDarkTextColor,
-          ),
-        ),
-        SizedBox(height: 8),
-        Container(
-          width: double.infinity,
-          padding: EdgeInsets.symmetric(horizontal: 15),
-          decoration: BoxDecoration(
-            color: kLightBackgroundColor,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: kMutedTextColor.withOpacity(0.3)),
-          ),
-          child: _communes.isEmpty
-              ? Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
+              ],
+            ),
+            SizedBox(height: 12),
+            if (_isLoading)
+              Center(child: CircularProgressIndicator(color: kPrimaryBlue))
+            else if (_categories.isEmpty)
+              Container(
+                padding: EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: kLightBackgroundColor,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Center(
                   child: Text(
-                    'Aucune commune disponible',
+                    'Aucune catégorie disponible',
                     style: TextStyle(color: kMutedTextColor),
                   ),
-                )
-              : DropdownButton<String>(
-                  value: _selectedCommune,
-                  isExpanded: true,
-                  underline: SizedBox(),
-                  icon: Icon(Icons.arrow_drop_down, color: kPrimaryBlue),
-                  hint: Text(
-                    'Sélectionnez une commune',
-                    style: TextStyle(color: kMutedTextColor),
-                  ),
-                  items: _communes.map((commune) {
-                    return DropdownMenuItem<String>(
-                      value: commune,
-                      child: Text(
-                        commune,
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontFamily: 'Exo2',
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedCommune = value;
-                    });
-                  },
                 ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCategoryFilter() {
-    final availableCategories = _allCategories.map((cat) => cat.name).toList()
-      ..sort();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(height: 15),
-        Text(
-          'Catégorie de service',
-          style: TextStyle(
-            fontWeight: FontWeight.w600,
-            fontFamily: 'Exo2',
-            color: kDarkTextColor,
-          ),
-        ),
-        SizedBox(height: 8),
-        Container(
-          width: double.infinity,
-          padding: EdgeInsets.symmetric(horizontal: 15),
-          decoration: BoxDecoration(
-            color: kLightBackgroundColor,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: kMutedTextColor.withOpacity(0.3)),
-          ),
-          child: _isLoading
-              ? Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(kPrimaryBlue),
-                        ),
+              )
+            else
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: _categories.map((category) {
+                  final isSelected = _selectedCategory == category;
+                  return FilterChip(
+                    label: Text(
+                      category,
+                      style: TextStyle(
+                        fontFamily: 'Exo2',
+                        color: isSelected ? Colors.white : kDarkTextColor,
                       ),
-                      SizedBox(width: 10),
-                      Text(
-                        'Chargement des catégories...',
-                        style: TextStyle(
-                          color: kMutedTextColor,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              : availableCategories.isEmpty
-                  ? Padding(
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                      child: Text(
-                        'Aucune catégorie disponible',
-                        style: TextStyle(color: kMutedTextColor),
-                      ),
-                    )
-                  : DropdownButton<String>(
-                      value: _selectedCategory,
-                      isExpanded: true,
-                      underline: SizedBox(),
-                      icon: Icon(Icons.arrow_drop_down, color: kPrimaryBlue),
-                      hint: Text(
-                        'Sélectionnez une catégorie',
-                        style: TextStyle(color: kMutedTextColor),
-                      ),
-                      items: availableCategories.map((category) {
-                        final catModel = _allCategories.firstWhere(
-                          (cat) => cat.name == category,
-                          orElse: () => _allCategories.first,
-                        );
-
-                        return DropdownMenuItem<String>(
-                          value: category,
-                          child: Row(
-                            children: [
-                              Icon(catModel.icon,
-                                  color: kPrimaryBlue, size: 18),
-                              SizedBox(width: 10),
-                              Text(
-                                category,
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontFamily: 'Exo2',
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        setState(() {
-                          _selectedCategory = value;
-                          _selectedSubcategory = null;
-                        });
-                        _updateAvailableSubcategories();
-                      },
                     ),
+                    avatar: Icon(
+                      _getIconForCategoryName(category),
+                      color: isSelected ? Colors.white : kPrimaryBlue,
+                      size: 18,
+                    ),
+                    selected: isSelected,
+                    onSelected: (selected) {
+                      setState(() {
+                        _selectedCategory = selected ? category : null;
+                        _selectedSubcategory = null;
+                      });
+                      _updateAvailableSubcategories();
+                    },
+                    backgroundColor: kLightBackgroundColor,
+                    selectedColor: kPrimaryBlue,
+                    shape: StadiumBorder(
+                      side: BorderSide(
+                        color: isSelected
+                            ? kPrimaryBlue
+                            : kMutedTextColor.withOpacity(0.3),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+          ],
         ),
-      ],
+      ),
     );
   }
 
-  Widget _buildSubcategoryFilter() {
+  Widget _buildSubcategorySection() {
     if (_selectedCategory == null || _availableSubcategories.isEmpty) {
       return SizedBox();
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(height: 15),
-        Text(
-          'Type de service',
-          style: TextStyle(
-            fontWeight: FontWeight.w600,
-            fontFamily: 'Exo2',
-            color: kDarkTextColor,
-          ),
-        ),
-        SizedBox(height: 8),
-        Container(
-          width: double.infinity,
-          padding: EdgeInsets.symmetric(horizontal: 15),
-          decoration: BoxDecoration(
-            color: kLightBackgroundColor,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: kMutedTextColor.withOpacity(0.3)),
-          ),
-          child: DropdownButton<String>(
-            value: _selectedSubcategory,
-            isExpanded: true,
-            underline: SizedBox(),
-            icon: Icon(Icons.arrow_drop_down, color: kPrimaryBlue),
-            hint: Text(
-              'Sélectionnez un type',
-              style: TextStyle(color: kMutedTextColor),
-            ),
-            items: _availableSubcategories.map((subcategory) {
-              // Try to find the actual subcategory model
-              SubcategoryModel? subModel;
-              for (var category in _allCategories) {
-                if (category.name == _selectedCategory) {
-                  subModel = category.subcategories.firstWhere(
-                    (sub) => sub.name == subcategory,
-                    orElse: () => SubcategoryModel(
-                      id: subcategory,
-                      name: subcategory,
-                      description: '',
-                      icon: _getIconForCategoryName(_selectedCategory!),
-                      iconCode: '',
-                    ),
-                  );
-                  break;
-                }
-              }
-
-              if (subModel == null) {
-                subModel = SubcategoryModel(
-                  id: subcategory,
-                  name: subcategory,
-                  description: '',
-                  icon: _getIconForCategoryName(_selectedCategory!),
-                  iconCode: '',
-                );
-              }
-
-              return DropdownMenuItem<String>(
-                value: subcategory,
-                child: Row(
-                  children: [
-                    Icon(subModel.icon, color: kMutedTextColor, size: 16),
-                    SizedBox(width: 10),
-                    Text(
-                      subcategory,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontFamily: 'Exo2',
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }).toList(),
-            onChanged: (value) {
-              setState(() {
-                _selectedSubcategory = value;
-              });
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDistanceFilter() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(height: 15),
-        Row(
-          children: [
-            Checkbox(
-              value: _useDistanceFilter,
-              onChanged: (value) {
-                setState(() {
-                  _useDistanceFilter = value ?? false;
-                });
-              },
-              activeColor: kPrimaryBlue,
-            ),
-            Text(
-              'Filtrer par distance',
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                fontFamily: 'Exo2',
-                color: kDarkTextColor,
-              ),
-            ),
-          ],
-        ),
-        if (_useDistanceFilter) ...[
-          SizedBox(height: 8),
-          Text(
-            'Distance maximale: ${_selectedDistance.toInt()} km',
-            style: TextStyle(
-              fontWeight: FontWeight.w500,
-              fontFamily: 'Exo2',
-              color: kDarkTextColor,
-            ),
-          ),
-          SizedBox(height: 8),
-          Slider(
-            value: _selectedDistance,
-            min: 1,
-            max: 50,
-            divisions: 49,
-            onChanged: (value) {
-              setState(() {
-                _selectedDistance = value;
-              });
-            },
-            activeColor: kPrimaryBlue,
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildActionButtons() {
-    return Row(
-      children: [
-        Expanded(
-          child: OutlinedButton(
-            onPressed: () {
-              setState(() {
-                _selectedWilaya = null;
-                _selectedCommune = null;
-                _selectedCategory = null;
-                _selectedSubcategory = null;
-                _selectedDistance = 20.0;
-                _useDistanceFilter = false;
-                _communes = [];
-                _availableSubcategories = [];
-              });
-            },
-            style: OutlinedButton.styleFrom(
-              padding: EdgeInsets.symmetric(vertical: 15),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: Text(
-              'Réinitialiser',
-              style: TextStyle(
-                color: kDarkTextColor,
-                fontFamily: 'Exo2',
-              ),
-            ),
-          ),
-        ),
-        SizedBox(width: 10),
-        Expanded(
-          child: ElevatedButton(
-            onPressed: () {
-              final filters = {
-                'wilaya': _selectedWilaya,
-                'commune': _selectedCommune,
-                'category': _selectedCategory,
-                'subcategory': _selectedSubcategory,
-                'maxDistance': _useDistanceFilter ? _selectedDistance : null,
-                'useDistanceFilter': _useDistanceFilter,
-              };
-
-              print("✅ Applying filters: $filters");
-              widget.onFiltersApplied(filters);
-              Navigator.pop(context);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: kPrimaryBlue,
-              padding: EdgeInsets.symmetric(vertical: 15),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: Text(
-              'Appliquer',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-                fontFamily: 'Exo2',
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCategoriesGrid() {
-    if (_isLoading) {
-      return Center(
-        child: CircularProgressIndicator(color: kPrimaryBlue),
-      );
-    }
-
-    if (_allCategories.isEmpty) {
-      return Center(
-        child: Text(
-          'Aucune catégorie disponible',
-          style: TextStyle(color: kMutedTextColor),
-        ),
-      );
-    }
-
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: NeverScrollableScrollPhysics(),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-        childAspectRatio: 1.2,
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(15),
       ),
-      itemCount: _allCategories.length,
-      itemBuilder: (context, index) {
-        final category = _allCategories[index];
-        final isSelected = _selectedCategory == category.name;
-
-        return GestureDetector(
-          onTap: () {
-            setState(() {
-              _selectedCategory = isSelected ? null : category.name;
-              _selectedSubcategory = null;
-            });
-            _updateAvailableSubcategories();
-          },
-          child: Container(
-            decoration: BoxDecoration(
-              color: isSelected ? kSelectedFilterColor : kCardBackgroundColor,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: isSelected
-                    ? kPrimaryBlue
-                    : kMutedTextColor.withOpacity(0.3),
-                width: isSelected ? 2 : 1,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black12,
-                  blurRadius: 4,
-                  offset: Offset(0, 2),
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.list_outlined, color: kPrimaryBlue, size: 20),
+                SizedBox(width: 8),
+                Text(
+                  'Type de service',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    fontFamily: 'Exo2',
+                    color: kDarkTextColor,
+                  ),
                 ),
               ],
             ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  category.icon,
-                  color: isSelected ? kPrimaryBlue : kMutedTextColor,
-                  size: 30,
+            SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              initialValue: _selectedSubcategory,
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: kLightBackgroundColor,
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide:
+                      BorderSide(color: kMutedTextColor.withOpacity(0.3)),
                 ),
-                SizedBox(height: 8),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide:
+                      BorderSide(color: kMutedTextColor.withOpacity(0.3)),
+                ),
+                hintText: 'Sélectionnez un type spécifique',
+                hintStyle: TextStyle(color: kMutedTextColor),
+              ),
+              icon: Icon(Icons.arrow_drop_down, color: kPrimaryBlue),
+              items: _availableSubcategories.map((subcategory) {
+                return DropdownMenuItem<String>(
+                  value: subcategory,
+                  child: Text(
+                    subcategory,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontFamily: 'Exo2',
+                    ),
+                  ),
+                );
+              }).toList(),
+              onChanged: (value) {
+                setState(() {
+                  _selectedSubcategory = value;
+                });
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLocationSection() {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(15),
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.location_on_outlined, color: kPrimaryBlue, size: 20),
+                SizedBox(width: 8),
                 Text(
-                  category.name,
-                  textAlign: TextAlign.center,
+                  'Localisation',
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 16,
                     fontWeight: FontWeight.w600,
                     fontFamily: 'Exo2',
-                    color: isSelected ? kPrimaryBlue : kDarkTextColor,
+                    color: kDarkTextColor,
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 16),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Wilaya',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w500,
+                    fontFamily: 'Exo2',
+                    color: kDarkTextColor,
+                  ),
+                ),
+                SizedBox(height: 6),
+                Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: kLightBackgroundColor,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: kMutedTextColor.withOpacity(0.3)),
+                  ),
+                  child: _isLoading
+                      ? Padding(
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                          child: Center(
+                              child: CircularProgressIndicator(
+                                  color: kPrimaryBlue)),
+                        )
+                      : DropdownButton<String>(
+                          value: _selectedWilaya,
+                          isExpanded: true,
+                          underline: SizedBox(),
+                          icon:
+                              Icon(Icons.arrow_drop_down, color: kPrimaryBlue),
+                          hint: Text(
+                            'Choisissez une wilaya',
+                            style: TextStyle(color: kMutedTextColor),
+                          ),
+                          items: _wilayas.map((wilaya) {
+                            return DropdownMenuItem<String>(
+                              value: wilaya,
+                              child: Text(
+                                wilaya,
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontFamily: 'Exo2',
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (value) {
+                            setState(() {
+                              _selectedWilaya = value;
+                              _communes = value != null
+                                  ? WilayaService.getCommunesForWilaya(value)
+                                  : [];
+                              _selectedCommune = null;
+                            });
+                          },
+                        ),
+                ),
+              ],
+            ),
+            if (_selectedWilaya != null) ...[
+              SizedBox(height: 16),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Commune',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w500,
+                      fontFamily: 'Exo2',
+                      color: kDarkTextColor,
+                    ),
+                  ),
+                  SizedBox(height: 6),
+                  Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: kLightBackgroundColor,
+                      borderRadius: BorderRadius.circular(12),
+                      border:
+                          Border.all(color: kMutedTextColor.withOpacity(0.3)),
+                    ),
+                    child: _communes.isEmpty
+                        ? Padding(
+                            padding: EdgeInsets.symmetric(vertical: 12),
+                            child: Text(
+                              'Aucune commune disponible',
+                              style: TextStyle(color: kMutedTextColor),
+                            ),
+                          )
+                        : DropdownButton<String>(
+                            value: _selectedCommune,
+                            isExpanded: true,
+                            underline: SizedBox(),
+                            icon: Icon(Icons.arrow_drop_down,
+                                color: kPrimaryBlue),
+                            hint: Text(
+                              'Choisissez une commune',
+                              style: TextStyle(color: kMutedTextColor),
+                            ),
+                            items: _communes.map((commune) {
+                              return DropdownMenuItem<String>(
+                                value: commune,
+                                child: Text(
+                                  commune,
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontFamily: 'Exo2',
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (value) {
+                              setState(() {
+                                _selectedCommune = value;
+                              });
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDistanceSection() {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(15),
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.location_searching_outlined,
+                    color: kPrimaryBlue, size: 20),
+                SizedBox(width: 8),
+                Text(
+                  'Distance',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    fontFamily: 'Exo2',
+                    color: kDarkTextColor,
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 16),
+            Row(
+              children: [
+                Switch(
+                  value: _useDistanceFilter,
+                  onChanged: (value) {
+                    setState(() {
+                      _useDistanceFilter = value;
+                    });
+                  },
+                  activeThumbColor: kPrimaryBlue,
+                ),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Limiter la recherche par distance',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w500,
+                      fontFamily: 'Exo2',
+                      color: kDarkTextColor,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (_useDistanceFilter) ...[
+              SizedBox(height: 16),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Distance maximale',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w500,
+                          fontFamily: 'Exo2',
+                          color: kDarkTextColor,
+                        ),
+                      ),
+                      Container(
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: kPrimaryBlue.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          '${_selectedDistance.toInt()} km',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: kPrimaryBlue,
+                            fontFamily: 'Exo2',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 12),
+                  Slider(
+                    value: _selectedDistance,
+                    min: 1,
+                    max: 50,
+                    divisions: 49,
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedDistance = value;
+                      });
+                    },
+                    activeColor: kPrimaryBlue,
+                    inactiveColor: kMutedTextColor.withOpacity(0.3),
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('1 km',
+                          style:
+                              TextStyle(color: kMutedTextColor, fontSize: 12)),
+                      Text('50 km',
+                          style:
+                              TextStyle(color: kMutedTextColor, fontSize: 12)),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSelectedFiltersIndicator() {
+    final List<String> activeFilters = [];
+    if (_selectedCategory != null) activeFilters.add(_selectedCategory!);
+    if (_selectedWilaya != null) activeFilters.add(_selectedWilaya!);
+    if (_useDistanceFilter) {
+      activeFilters.add('${_selectedDistance.toInt()} km');
+    }
+
+    if (activeFilters.isEmpty) return SizedBox();
+
+    return Container(
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: kPrimaryBlue.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: kPrimaryBlue.withOpacity(0.2)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.filter_list, color: kPrimaryBlue, size: 18),
+          SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Filtres actifs',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: kDarkTextColor,
+                    fontFamily: 'Exo2',
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  activeFilters.join(' • '),
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: kMutedTextColor,
+                    fontFamily: 'Exo2',
                   ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
@@ -675,70 +679,208 @@ class _SearchFilterDialogState extends State<SearchFilterDialog> {
               ],
             ),
           ),
-        );
-      },
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButtons() {
+    return Container(
+      padding: EdgeInsets.only(top: 20),
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(
+            color: kMutedTextColor.withOpacity(0.2),
+            width: 1,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: OutlinedButton(
+              onPressed: () {
+                setState(() {
+                  _selectedWilaya = null;
+                  _selectedCommune = null;
+                  _selectedCategory = null;
+                  _selectedSubcategory = null;
+                  _selectedDistance = 20.0;
+                  _useDistanceFilter = false;
+                  _communes = [];
+                  _availableSubcategories = [];
+                });
+              },
+              style: OutlinedButton.styleFrom(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                side: BorderSide(color: kMutedTextColor.withOpacity(0.3)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.refresh, size: 18, color: kDarkTextColor),
+                  SizedBox(width: 8),
+                  Text(
+                    'Tout effacer',
+                    style: TextStyle(
+                      color: kDarkTextColor,
+                      fontFamily: 'Exo2',
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          SizedBox(width: 12),
+          Expanded(
+            child: ElevatedButton(
+              onPressed: _isLoading
+                  ? null
+                  : () async {
+                      // Get coordinates for the selected wilaya if available
+                      LatLng? wilayaCoordinates;
+                      if (_selectedWilaya != null) {
+                        wilayaCoordinates =
+                            await _getWilayaCoordinates(_selectedWilaya!);
+                      }
+
+                      final filters = {
+                        'wilaya': _selectedWilaya,
+                        'wilayaCoordinates':
+                            wilayaCoordinates, // Add coordinates
+                        'commune': _selectedCommune,
+                        'category': _selectedCategory,
+                        'subcategory': _selectedSubcategory,
+                        'maxDistance':
+                            _useDistanceFilter ? _selectedDistance : null,
+                        'useDistanceFilter': _useDistanceFilter,
+                      };
+
+                      widget.onFiltersApplied(filters);
+                      Navigator.pop(context);
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: kPrimaryBlue,
+                padding: EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 2,
+              ),
+              child: _isLoading
+                  ? CircularProgressIndicator(
+                      color: Colors.white, strokeWidth: 2)
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.check, size: 20, color: Colors.white),
+                        SizedBox(width: 8),
+                        Text(
+                          'Appliquer les filtres',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontFamily: 'Exo2',
+                            fontSize: 15,
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+      ),
+      insetPadding: EdgeInsets.all(16),
       child: Container(
         constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.9,
+          maxHeight: MediaQuery.of(context).size.height * 0.85,
           maxWidth: 500,
         ),
-        padding: EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildHeader(),
-            SizedBox(height: 20),
-
-            // Categories Grid
-            Text(
-              'Catégories',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                fontFamily: 'Exo2',
-                color: kDarkTextColor,
-              ),
-            ),
-            SizedBox(height: 10),
-            Expanded(
-              child: _buildCategoriesGrid(),
-            ),
-            SizedBox(height: 20),
-
-            // Advanced Filters Section
-            ExpansionTile(
-              title: Text(
-                'Filtres avancés',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontFamily: 'Exo2',
-                  color: kDarkTextColor,
+        child: _isLoading
+            ? SizedBox(
+                height: 300,
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      CircularProgressIndicator(color: kPrimaryBlue),
+                      SizedBox(height: 16),
+                      Text(
+                        'Chargement des filtres...',
+                        style: TextStyle(
+                          color: kMutedTextColor,
+                          fontFamily: 'Exo2',
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              children: [
-                SizedBox(height: 10),
-                _buildSubcategoryFilter(),
-                SizedBox(height: 15),
-                _buildWilayaFilter(),
-                _buildCommuneFilter(),
-                SizedBox(height: 15),
-                _buildDistanceFilter(),
-                SizedBox(height: 20),
-              ],
-            ),
+              )
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(24, 24, 24, 16),
+                    child: _buildHeader(),
+                  ),
 
-            SizedBox(height: 20),
-            _buildActionButtons(),
-          ],
-        ),
+                  // Content
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: EdgeInsets.symmetric(horizontal: 24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SizedBox(height: 8),
+
+                          // Selected Filters Indicator
+                          _buildSelectedFiltersIndicator(),
+                          SizedBox(height: 24),
+
+                          // Category Section
+                          _buildCategorySection(),
+                          SizedBox(height: 16),
+
+                          // Subcategory Section (if category selected)
+                          _buildSubcategorySection(),
+                          if (_selectedCategory != null &&
+                              _availableSubcategories.isNotEmpty)
+                            SizedBox(height: 16),
+
+                          // Location Section
+                          _buildLocationSection(),
+                          SizedBox(height: 16),
+
+                          // Distance Section
+                          _buildDistanceSection(),
+                          SizedBox(height: 24),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // Action Buttons
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(24, 0, 24, 24),
+                    child: _buildActionButtons(),
+                  ),
+                ],
+              ),
       ),
     );
   }

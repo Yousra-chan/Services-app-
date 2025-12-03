@@ -1,98 +1,168 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:myapp/models/ServicesModel.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:myapp/models/UserModel.dart';
 
 class ProviderModel {
-  final UserModel user;
-  Service? primaryService; // Add this to store the main service
+  final String? uid;
+  String name;
+  String profession;
+  String address;
+  String wilaya;
+  String commune;
+  final double rating;
+  final bool subscriptionActive;
+  LatLng? location;
 
-  ProviderModel({required this.user, this.primaryService});
+  // Fields required by the UI
+  final String phone;
+  final String whatsapp; // Will use phone number
+  final String description;
+  final String photoUrl;
+  final List<String> serviceIds;
+  final List<String> serviceImages; // Fetched from services collection
 
-  String? get uid => user.uid;
-  String get name => user.name;
-  String get profession => user.profession ?? '';
-  String get phone => user.phone;
-  String get whatsapp => user.phone;
-  String? get photoUrl => user.photoUrl;
-  GeoPoint? get location => user.location;
-  String get address => user.address;
-  double get rating => user.rating;
-  bool get subscriptionActive => user.subscriptionActive;
-  String get email => user.email;
-  List<String> get serviceIds => user.serviceIds;
-  List<String> get chatIds => user.chatIds;
+  ProviderModel({
+    this.uid,
+    required this.name,
+    required this.profession,
+    required this.address,
+    required this.wilaya,
+    required this.commune,
+    required this.phone,
+    required this.whatsapp,
+    required this.description,
+    required this.photoUrl,
+    required this.serviceIds,
+    this.serviceImages = const [],
+    this.rating = 0.0,
+    this.subscriptionActive = false,
+    this.location,
+  });
 
-  // Get description from primary service
-  String get description =>
-      primaryService?.description ?? 'No service description available.';
-
-  // These methods extract info from address
-  String get wilaya => _extractWilayaFromAddress(user.address) ?? '';
-  String get commune => _extractCommuneFromAddress(user.address) ?? '';
-
-  String? _extractWilayaFromAddress(String address) {
-    if (address.isEmpty) return null;
-
-    final wilayas = [
-      'Alger',
-      'Boumerdès',
-      'Blida',
-      'Oran',
-      'Tizi Ouzou',
-      'Constantine'
-    ];
-
-    for (var wilaya in wilayas) {
-      if (address.toLowerCase().contains(wilaya.toLowerCase())) {
-        return wilaya;
-      }
-    }
-
-    return null;
-  }
-
-  String? _extractCommuneFromAddress(String address) {
-    if (address.isEmpty) return null;
-
-    final parts = address.split(',');
-    if (parts.isNotEmpty) {
-      return parts.first.trim();
-    }
-
-    return null;
-  }
-
-  // Factory method that also fetches the primary service
-  static Future<ProviderModel> fromUserWithService(UserModel user) async {
-    Service? primaryService;
-
-    if (user.serviceIds.isNotEmpty) {
-      try {
-        final serviceDoc = await FirebaseFirestore.instance
-            .collection('services')
-            .doc(user.serviceIds.first)
-            .get();
-
-        if (serviceDoc.exists) {
-          primaryService = Service.fromMap({
-            ...serviceDoc.data() as Map<String, dynamic>,
-            'id': serviceDoc.id,
-          });
-        }
-      } catch (e) {
-        print('Error fetching service: $e');
-      }
-    }
-
-    return ProviderModel(user: user, primaryService: primaryService);
-  }
-
-  // Existing factory for backward compatibility
   factory ProviderModel.fromUser(UserModel user) {
-    return ProviderModel(user: user);
+    LatLng? userLocation;
+    if (user.location != null) {
+      userLocation = LatLng(user.location!.latitude, user.location!.longitude);
+    }
+
+    return ProviderModel(
+      uid: user.uid,
+      name: user.name,
+      profession: user.profession ?? 'Service Provider',
+      address: user.address,
+      wilaya: user.wilaya ?? '',
+      commune: user.commune ?? '',
+      phone: user.phone,
+      whatsapp: user.phone, // Use phone for whatsapp
+      description: user.profession ?? 'Professional service provider.',
+      photoUrl: user.photoUrl,
+      serviceIds: user.serviceIds,
+      serviceImages: const [], // Will be fetched separately
+      rating: user.rating,
+      subscriptionActive: user.subscriptionActive,
+      location: userLocation,
+    );
+  }
+
+  // Factory method to create from Firestore data
+  factory ProviderModel.fromFirestore(Map<String, dynamic> data, String id) {
+    LatLng? location;
+    if (data['location'] != null) {
+      final geoPoint = data['location'] as GeoPoint;
+      location = LatLng(geoPoint.latitude, geoPoint.longitude);
+    }
+
+    return ProviderModel(
+      uid: id,
+      name: data['name'] ?? '',
+      profession: data['profession'] ?? 'Service Provider',
+      address: data['address'] ?? '',
+      wilaya: data['wilaya'] ?? '',
+      commune: data['commune'] ?? '',
+      phone: data['phone'] ?? '',
+      whatsapp: data['phone'] ?? '', // Use phone for whatsapp
+      description: data['description'] ??
+          data['profession'] ??
+          'Professional service provider.',
+      photoUrl: data['photoUrl'] ?? '',
+      serviceIds: List<String>.from(data['serviceIds'] ?? []),
+      serviceImages: const [], // Will be fetched separately
+      rating: (data['rating'] as num?)?.toDouble() ?? 0.0,
+      subscriptionActive: data['subscriptionActive'] ?? false,
+      location: location,
+    );
   }
 
   Map<String, dynamic> toMap() {
-    return user.toMap();
+    return {
+      'uid': uid,
+      'name': name,
+      'profession': profession,
+      'address': address,
+      'wilaya': wilaya,
+      'commune': commune,
+      'phone': phone,
+      'whatsapp': whatsapp,
+      'description': description,
+      'photoUrl': photoUrl,
+      'serviceIds': serviceIds,
+      'serviceImages': serviceImages,
+      'rating': rating,
+      'subscriptionActive': subscriptionActive,
+      'location': location != null
+          ? {'latitude': location!.latitude, 'longitude': location!.longitude}
+          : null,
+    };
+  }
+
+  // Helper method to get service images from services collection
+  Future<List<String>> fetchServiceImages() async {
+    if (serviceIds.isEmpty) return [];
+
+    final images = <String>[];
+    final servicesRef = FirebaseFirestore.instance.collection('services');
+
+    for (final serviceId in serviceIds) {
+      try {
+        final doc = await servicesRef.doc(serviceId).get();
+        if (doc.exists) {
+          final data = doc.data();
+          if (data != null && data['images'] is List) {
+            final serviceImages = List<String>.from(data['images'] ?? []);
+            images.addAll(serviceImages);
+          }
+        }
+      } catch (e) {
+        print('Error fetching service images: $e');
+      }
+    }
+
+    return images;
+  }
+
+  // Create a copy with service images
+  ProviderModel copyWithServiceImages(List<String> images) {
+    return ProviderModel(
+      uid: uid,
+      name: name,
+      profession: profession,
+      address: address,
+      wilaya: wilaya,
+      commune: commune,
+      phone: phone,
+      whatsapp: whatsapp,
+      description: description,
+      photoUrl: photoUrl,
+      serviceIds: serviceIds,
+      serviceImages: images,
+      rating: rating,
+      subscriptionActive: subscriptionActive,
+      location: location,
+    );
+  }
+
+  @override
+  String toString() {
+    return 'ProviderModel{name: $name, profession: $profession, wilaya: $wilaya, commune: $commune}';
   }
 }

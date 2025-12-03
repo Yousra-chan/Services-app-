@@ -109,6 +109,20 @@ class HomeNotificationItem {
     }
   }
 
+  // ADDED: Getter for formatted title with message count
+  String get formattedTitle {
+    if (type == HomeNotificationType.message && messageCount > 1) {
+      return title.replaceAllMapped(
+        RegExp(r'New message from (.*?)( \(\d+ new\))?'),
+        (match) {
+          final sender = match[1] ?? '';
+          return 'New message from $sender ($messageCount new)';
+        },
+      );
+    }
+    return title;
+  }
+
   HomeNotificationItem copyWithNewMessage(String newMessage, DateTime newTime) {
     return HomeNotificationItem(
       id: id,

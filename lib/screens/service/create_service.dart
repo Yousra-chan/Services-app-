@@ -46,7 +46,7 @@ class _CreateServiceScreenState extends State<CreateServiceScreen> {
       body: Column(
         children: [
           // Progress Header
-          Container(
+          SizedBox(
             height: 6,
             child: LinearProgressIndicator(
               value: 0.8,

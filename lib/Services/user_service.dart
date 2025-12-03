@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/UserModel.dart';
+import '../models/ServicesModel.dart';
 
 class UserService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -31,10 +32,8 @@ class UserService {
 
     final snapshot = await query.get();
     return snapshot.docs
-        .map(
-          (doc) =>
-              UserModel.fromMap(doc.data() as Map<String, dynamic>, doc.id),
-        )
+        .map((doc) =>
+            UserModel.fromMap(doc.data() as Map<String, dynamic>, doc.id))
         .toList();
   }
 
@@ -56,15 +55,13 @@ class UserService {
     });
   }
 
-  /// Update user's service categories
-  Future<void> updateUserServices(
+  /// Update user's service IDs
+  Future<void> updateUserServiceIds(
     String userId,
-    List<String> categories,
-    List<String> subServices,
+    List<String> serviceIds,
   ) async {
     await _firestore.collection('users').doc(userId).update({
-      'serviceCategories': categories,
-      'subServices': subServices,
+      'serviceIds': serviceIds,
       'updatedAt': FieldValue.serverTimestamp(),
     });
   }
@@ -89,76 +86,53 @@ class UserService {
         .map((doc) => UserModel.fromMap(doc.data()!, doc.id));
   }
 
-  /// Get user stats including address, total jobs, rating, etc.
+  /// Get user stats
   Future<Map<String, dynamic>> getUserStats(String userId) async {
     try {
-      // Get user document
       final userDoc = await _firestore.collection('users').doc(userId).get();
 
-      Map<String, dynamic> userData = {};
+      if (!userDoc.exists) return {};
 
-      if (userDoc.exists) {
-        userData = userDoc.data() as Map<String, dynamic>? ?? {};
+      final userData = userDoc.data()!;
 
-        // Get jobs statistics
-        final jobsQuery = await _firestore
-            .collection('jobs')
-            .where('userId', isEqualTo: userId)
-            .get();
+      // Get services by this provider
+      final servicesQuery = await _firestore
+          .collection('services')
+          .where('providerId', isEqualTo: userId)
+          .get();
 
-        final completedJobsQuery = await _firestore
-            .collection('jobs')
-            .where('userId', isEqualTo: userId)
-            .where('status', isEqualTo: 'completed')
-            .get();
+      // Calculate average rating
+      double totalRating = 0;
+      int validRatings = 0;
 
-        // Calculate rating from reviews
-        final reviewsQuery = await _firestore
-            .collection('reviews')
-            .where('targetUserId', isEqualTo: userId)
-            .get();
-
-        double averageRating = 0.0;
-        if (reviewsQuery.docs.isNotEmpty) {
-          double totalRating = 0;
-          int validReviews = 0;
-
-          for (final doc in reviewsQuery.docs) {
-            final data = doc.data() as Map<String, dynamic>;
-            if (data.containsKey('rating') && data['rating'] != null) {
-              totalRating += (data['rating'] as num).toDouble();
-              validReviews++;
-            }
-          }
-
-          if (validReviews > 0) {
-            averageRating = totalRating / validReviews;
-          }
+      for (final doc in servicesQuery.docs) {
+        final data = doc.data();
+        final rating = (data['rating'] as num?)?.toDouble() ?? 0.0;
+        if (rating > 0) {
+          totalRating += rating;
+          validRatings++;
         }
-
-        return {
-          'address': userData['address'] ?? '',
-          'wilaya': userData['wilaya'] ?? '',
-          'commune': userData['commune'] ?? '',
-          'profession': userData['profession'] ?? '',
-          'serviceCategories':
-              List<String>.from(userData['serviceCategories'] ?? []),
-          'subServices': List<String>.from(userData['subServices'] ?? []),
-          'totalJobs': jobsQuery.docs.length,
-          'completedJobs': completedJobsQuery.docs.length,
-          'rating': averageRating,
-          'name': userData['name'] ?? '',
-          'email': userData['email'] ?? '',
-          'photoUrl': userData['photoUrl'] ?? '',
-          'role': userData['role'] ?? 'client',
-          'subscriptionActive': userData['subscriptionActive'] ?? false,
-        };
       }
 
-      return {};
+      final averageRating = validRatings > 0 ? totalRating / validRatings : 0.0;
+
+      return {
+        'address': userData['address'] ?? '',
+        'wilaya': userData['wilaya'] ?? '',
+        'commune': userData['commune'] ?? '',
+        'profession': userData['profession'] ?? '',
+        'serviceIds': List<String>.from(userData['serviceIds'] ?? []),
+        'totalJobs': servicesQuery.docs.length,
+        'rating': averageRating,
+        'name': userData['name'] ?? '',
+        'email': userData['email'] ?? '',
+        'photoUrl': userData['photoUrl'] ?? '',
+        'role': userData['role'] ?? 'client',
+        'subscriptionActive': userData['subscriptionActive'] ?? false,
+      };
     } catch (e) {
       print('Error getting user stats: $e');
-      throw e;
+      rethrow;
     }
   }
 
@@ -171,12 +145,12 @@ class UserService {
       });
     } catch (e) {
       print('Error updating user role: $e');
-      throw e;
+      rethrow;
     }
   }
 
-  /// Get provider services (from separate collection)
-  Future<List<Map<String, dynamic>>> getProviderServices(String userId) async {
+  /// Get provider services - FIXED VERSION
+  Future<List<Service>> getProviderServices(String userId) async {
     try {
       final querySnapshot = await _firestore
           .collection('services')
@@ -185,54 +159,92 @@ class UserService {
           .get();
 
       return querySnapshot.docs
-          .map((doc) => {
-                'id': doc.id,
-                ...doc.data() as Map<String, dynamic>,
-              })
+          .map((doc) => Service.fromFirestore(doc)) // Use fromFirestore instead
           .toList();
     } catch (e) {
       print('Error getting provider services: $e');
-      throw e;
+      rethrow;
     }
   }
 
-  /// Add new service
-  Future<void> addService(
-      String userId, Map<String, dynamic> serviceData) async {
+  /// Add new service - FIXED VERSION
+  Future<void> addService(Service service) async {
     try {
-      await _firestore.collection('services').add({
-        'providerId': userId,
-        ...serviceData,
-        'createdAt': FieldValue.serverTimestamp(),
+      // Generate a new document ID
+      final docRef = _firestore.collection('services').doc();
+      final serviceId = docRef.id;
+
+      // Create service with the generated ID
+      final serviceWithId = service.copyWith(id: serviceId);
+
+      // Add to services collection
+      await docRef.set(serviceWithId.toMap());
+
+      // Update user's serviceIds array
+      await _firestore.collection('users').doc(service.providerId).update({
+        'serviceIds': FieldValue.arrayUnion([serviceId]),
         'updatedAt': FieldValue.serverTimestamp(),
       });
     } catch (e) {
       print('Error adding service: $e');
-      throw e;
+      rethrow;
     }
   }
 
-  /// Update service
-  Future<void> updateService(
-      String serviceId, Map<String, dynamic> serviceData) async {
+  /// Update service - FIXED VERSION
+  Future<void> updateService(Service service) async {
     try {
-      await _firestore.collection('services').doc(serviceId).update({
-        ...serviceData,
+      if (service.id.isEmpty) {
+        throw Exception('Service ID is required for update');
+      }
+
+      await _firestore.collection('services').doc(service.id).update({
+        'title': service.title,
+        'description': service.description,
+        'category': service.category,
+        'subcategory': service.subcategory,
+        'price': service.price,
+        'priceUnit': service.priceUnit,
+        'location': service.location,
+        'latitude': service.latitude,
+        'longitude': service.longitude,
+        'tags': service.tags,
+        'images': service.images,
+        'isActive': service.isActive,
         'updatedAt': FieldValue.serverTimestamp(),
       });
     } catch (e) {
       print('Error updating service: $e');
-      throw e;
+      rethrow;
     }
   }
 
-  /// Delete service
-  Future<void> deleteService(String serviceId) async {
+  /// Delete service - FIXED VERSION
+  Future<void> deleteService(String serviceId, String userId) async {
     try {
+      // Delete from services collection
       await _firestore.collection('services').doc(serviceId).delete();
+
+      // Remove from user's serviceIds array
+      await _firestore.collection('users').doc(userId).update({
+        'serviceIds': FieldValue.arrayRemove([serviceId]),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
     } catch (e) {
       print('Error deleting service: $e');
-      throw e;
+      rethrow;
+    }
+  }
+
+  /// Get service by ID
+  Future<Service?> getServiceById(String serviceId) async {
+    try {
+      final doc = await _firestore.collection('services').doc(serviceId).get();
+      if (!doc.exists) return null;
+      return Service.fromFirestore(doc);
+    } catch (e) {
+      print('Error getting service by ID: $e');
+      return null;
     }
   }
 }

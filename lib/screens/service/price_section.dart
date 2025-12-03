@@ -16,14 +16,14 @@ class PriceSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color _primaryColor = Color(0xFF2563EB); // Professional blue
-    final Color _accentColor = Color(0xFF059669); // Success green
-    final Color _textPrimary = Color(0xFF1E293B); // Dark text
-    final Color _textSecondary = Color(0xFF64748B); // Muted text
-    final Color _borderColor = Color(0xFFE2E8F0); // Border color
-    final Color _backgroundColor = Color(0xFFF8FAFC); // Light background
+    final Color primaryColor = Color(0xFF2563EB); // Professional blue
+    final Color accentColor = Color(0xFF059669); // Success green
+    final Color textPrimary = Color(0xFF1E293B); // Dark text
+    final Color textSecondary = Color(0xFF64748B); // Muted text
+    final Color borderColor = Color(0xFFE2E8F0); // Border color
+    final Color backgroundColor = Color(0xFFF8FAFC); // Light background
 
-    Widget _buildSectionHeader() {
+    Widget buildSectionHeader() {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -32,13 +32,13 @@ class PriceSection extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: _primaryColor.withOpacity(0.1),
+                  color: primaryColor.withOpacity(0.1),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
                   Icons.currency_exchange_rounded,
                   size: 20,
-                  color: _primaryColor,
+                  color: primaryColor,
                 ),
               ),
               const SizedBox(width: 12),
@@ -51,7 +51,7 @@ class PriceSection extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w700,
-                        color: _textPrimary,
+                        color: textPrimary,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -59,7 +59,7 @@ class PriceSection extends StatelessWidget {
                       'Set your service price in Algerian Dinar (DZD)',
                       style: TextStyle(
                         fontSize: 14,
-                        color: _textSecondary,
+                        color: textSecondary,
                       ),
                     ),
                   ],
@@ -72,12 +72,12 @@ class PriceSection extends StatelessWidget {
       );
     }
 
-    Widget _buildPriceInput() {
+    Widget buildPriceInput() {
       return Container(
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: _borderColor, width: 1.5),
+          border: Border.all(color: borderColor, width: 1.5),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.04),
@@ -91,13 +91,13 @@ class PriceSection extends StatelessWidget {
           decoration: InputDecoration(
             labelText: 'Price (DZD)',
             labelStyle: TextStyle(
-              color: _textSecondary,
+              color: textSecondary,
               fontWeight: FontWeight.w600,
               fontSize: 14,
             ),
             hintText: '0.00',
             hintStyle: TextStyle(
-              color: _textSecondary.withOpacity(0.6),
+              color: textSecondary.withOpacity(0.6),
               fontSize: 16,
             ),
             border: InputBorder.none,
@@ -115,7 +115,7 @@ class PriceSection extends StatelessWidget {
                   Text(
                     'DZD',
                     style: TextStyle(
-                      color: _primaryColor,
+                      color: primaryColor,
                       fontWeight: FontWeight.w700,
                       fontSize: 14,
                     ),
@@ -124,7 +124,7 @@ class PriceSection extends StatelessWidget {
                   Container(
                     width: 1,
                     height: 20,
-                    color: _borderColor,
+                    color: borderColor,
                   ),
                 ],
               ),
@@ -133,7 +133,7 @@ class PriceSection extends StatelessWidget {
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w600,
-            color: _textPrimary,
+            color: textPrimary,
           ),
           keyboardType: TextInputType.numberWithOptions(decimal: true),
           validator: (value) {
@@ -156,12 +156,12 @@ class PriceSection extends StatelessWidget {
       );
     }
 
-    Widget _buildPriceUnitDropdown() {
+    Widget buildPriceUnitDropdown() {
       return Container(
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: _borderColor, width: 1.5),
+          border: Border.all(color: borderColor, width: 1.5),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.04),
@@ -171,12 +171,12 @@ class PriceSection extends StatelessWidget {
           ],
         ),
         child: DropdownButtonFormField<String>(
-          value: selectedPriceUnit,
+          initialValue: selectedPriceUnit,
           isExpanded: true,
           decoration: InputDecoration(
             labelText: 'Billing Method',
             labelStyle: TextStyle(
-              color: _textSecondary,
+              color: textSecondary,
               fontWeight: FontWeight.w600,
               fontSize: 14,
             ),
@@ -218,7 +218,7 @@ class PriceSection extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
-                    color: _textPrimary,
+                    color: textPrimary,
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -231,11 +231,11 @@ class PriceSection extends StatelessWidget {
           dropdownColor: Colors.white,
           icon: Icon(
             Icons.arrow_drop_down_rounded,
-            color: _primaryColor,
+            color: primaryColor,
             size: 24,
           ),
           style: TextStyle(
-            color: _textPrimary,
+            color: textPrimary,
             fontWeight: FontWeight.w500,
             fontSize: 14,
           ),
@@ -243,14 +243,14 @@ class PriceSection extends StatelessWidget {
       );
     }
 
-    Widget _buildPriceInfo() {
+    Widget buildPriceInfo() {
       if (priceController.text.isEmpty) return const SizedBox.shrink();
 
       final price = double.tryParse(priceController.text);
       if (price == null) return const SizedBox.shrink();
 
       String infoText = '';
-      Color infoColor = _accentColor;
+      Color infoColor = accentColor;
 
       switch (selectedPriceUnit) {
         case 'Per Hour':
@@ -274,9 +274,9 @@ class PriceSection extends StatelessWidget {
         margin: const EdgeInsets.only(top: 12),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: _accentColor.withOpacity(0.1),
+          color: accentColor.withOpacity(0.1),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: _accentColor.withOpacity(0.3)),
+          border: Border.all(color: accentColor.withOpacity(0.3)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -284,13 +284,13 @@ class PriceSection extends StatelessWidget {
             Icon(
               Icons.info_outline_rounded,
               size: 16,
-              color: _accentColor,
+              color: accentColor,
             ),
             const SizedBox(width: 8),
             Text(
               infoText,
               style: TextStyle(
-                color: _accentColor,
+                color: accentColor,
                 fontWeight: FontWeight.w600,
                 fontSize: 13,
               ),
@@ -300,19 +300,19 @@ class PriceSection extends StatelessWidget {
       );
     }
 
-    Widget _buildPriceChip(String text) {
+    Widget buildPriceChip(String text) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: _borderColor),
+          border: Border.all(color: borderColor),
         ),
         child: Text(
           text,
           style: TextStyle(
             fontSize: 12,
-            color: _textSecondary,
+            color: textSecondary,
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -322,7 +322,7 @@ class PriceSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionHeader(),
+        buildSectionHeader(),
 
         // Price Input Row
         Row(
@@ -333,15 +333,15 @@ class PriceSection extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildPriceInput(),
-                  _buildPriceInfo(),
+                  buildPriceInput(),
+                  buildPriceInfo(),
                 ],
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
               flex: 2,
-              child: _buildPriceUnitDropdown(),
+              child: buildPriceUnitDropdown(),
             ),
           ],
         ),

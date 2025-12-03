@@ -5,26 +5,124 @@ import 'package:myapp/models/ProviderModel.dart';
 import 'package:myapp/ViewModel/auth_view_model.dart';
 import 'package:myapp/services/provider_service.dart';
 import 'package:myapp/services/chat_service.dart';
+import 'package:myapp/utils/image_utils.dart';
 import 'package:myapp/screens/posts/posts_constants.dart' show kOfferingColor;
-import 'package:myapp/screens/profile/profile_constants.dart';
-import 'package:myapp/utils/image_utils.dart';
 
-/// Enhanced Collapsing Header
-import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'package:myapp/models/ProviderModel.dart';
-import 'package:myapp/utils/image_utils.dart';
+const kPrimaryBlue = Color(0xFF4A6FDC);
+const kDarkTextColor = Color(0xFF333333);
+const kMutedTextColor = Color(0xFF666666);
+const kLightBackgroundColor = Color(0xFFF5F5F5);
+
+class ProviderProfileScreen extends StatelessWidget {
+  final ProviderModel provider;
+  final String serviceCategory;
+
+  const ProviderProfileScreen({
+    required this.provider,
+    required this.serviceCategory,
+    super.key,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kLightBackgroundColor,
+      body: Stack(
+        children: [
+          CustomScrollView(
+            slivers: [
+              // 1. Collapsing Header (SliverAppBar)
+              ProviderHeaderSliver(
+                provider: provider,
+                serviceCategory: serviceCategory ?? 'General Services',
+              ),
+
+              // 2. Main Content Body (SliverList holds the rest of your cards)
+              SliverList(
+                delegate: SliverChildListDelegate(
+                  [
+                    Padding(
+                      padding: const EdgeInsets.all(20.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Description Section
+                          _buildSectionTitle('👋 About ${provider.name}'),
+                          const SizedBox(height: 10),
+                          DescriptionCard(description: provider.description),
+                          const SizedBox(height: 30),
+
+                          // Services Section - FIXED: Use serviceIds instead of services
+                          _buildSectionTitle('🔧 Services Offered'),
+                          const SizedBox(height: 10),
+                          // Option 1: If ServicesChips expects List<String> for service names
+                          ServicesChips(
+                            services: provider.serviceIds, // Use serviceIds
+                          ),
+
+                          const SizedBox(height: 30),
+
+                          // Gallery Section
+                          _buildSectionTitle('📸 Work Gallery'),
+                          const SizedBox(height: 10),
+                          WorkGallery(providerId: provider.uid ?? ''),
+                          const SizedBox(height: 30),
+
+                          // Contact Details Section
+                          _buildSectionTitle('📞 Contact Information'),
+                          const SizedBox(height: 10),
+                          ContactDetails(provider: provider),
+                          const SizedBox(height: 120),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          // 3. Floating Contact Button (Fixed Bottom Bar)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: ContactButton(provider: provider),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Text(
+      title,
+      style: const TextStyle(
+        fontSize: 20,
+        fontWeight: FontWeight.bold,
+        color: kDarkTextColor,
+        fontFamily: 'Exo2',
+      ),
+    );
+  }
+}
+
+// --- WIDGETS (The remaining code you provided, ensuring it's in the same file or imported) ---
+
+// NOTE: You must ensure all these classes (ProviderHeaderSliver, RatingBadge, etc.)
+// are available either in this file or imported from their respective files.
 
 /// Enhanced Collapsing Header
 class ProviderHeaderSliver extends StatelessWidget {
   final ProviderModel provider;
   final String? imageUrl;
-  final String serviceCategory; // Add this parameter
+  final String serviceCategory;
 
   const ProviderHeaderSliver({
     required this.provider,
     this.imageUrl,
-    this.serviceCategory = 'General Services', // Default value
+    this.serviceCategory = 'General Services',
+    super.key,
   });
 
   @override
@@ -36,7 +134,7 @@ class ProviderHeaderSliver extends StatelessWidget {
     );
 
     return SliverAppBar(
-      backgroundColor: const Color(0xFF4A6FDC), // Using your kPrimaryBlue
+      backgroundColor: kPrimaryBlue,
       expandedHeight: 380.0,
       pinned: true,
       elevation: 0,
@@ -199,8 +297,8 @@ class ProviderHeaderSliver extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            const Color(0xFF4A6FDC),
-            const Color(0xFF4A6FDC),
+            kPrimaryBlue,
+            kPrimaryBlue,
             const Color(0xFF667EEA),
           ],
         ),
@@ -221,11 +319,13 @@ class ProviderHeaderSliver extends StatelessWidget {
 
     final shareContent = '$shareText $url';
 
-    if (await canLaunchUrl(
+    if (await launchUrl(
         Uri.parse('sms:?body=${Uri.encodeComponent(shareContent)}'))) {
       await launchUrl(
           Uri.parse('sms:?body=${Uri.encodeComponent(shareContent)}'));
     } else {
+      // Use standard sharing method if SMS fails or is not preferred
+      // You might use the 'share_plus' package here instead of just SMS.
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Sharing ${provider.name}\'s profile'),
@@ -242,7 +342,7 @@ class ProviderHeaderSliver extends StatelessWidget {
 class RatingBadge extends StatelessWidget {
   final double rating;
 
-  const RatingBadge({required this.rating});
+  const RatingBadge({required this.rating, super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -280,17 +380,11 @@ class RatingBadge extends StatelessWidget {
   }
 }
 
-/// Constants (add these if not already defined)
-const kPrimaryBlue = Color(0xFF4A6FDC);
-const kDarkTextColor = Color(0xFF333333);
-const kMutedTextColor = Color(0xFF666666);
-const kLightBackgroundColor = Color(0xFFF5F5F5);
-
 /// Enhanced Description Card
 class DescriptionCard extends StatelessWidget {
   final String description;
 
-  const DescriptionCard({required this.description});
+  const DescriptionCard({required this.description, super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -310,7 +404,7 @@ class DescriptionCard extends StatelessWidget {
       ),
       child: Text(
         description.isNotEmpty ? description : 'No description available.',
-        style: TextStyle(
+        style: const TextStyle(
           color: kDarkTextColor,
           height: 1.6,
           fontSize: 15,
@@ -324,7 +418,7 @@ class DescriptionCard extends StatelessWidget {
 class ServicesChips extends StatelessWidget {
   final List<String> services;
 
-  const ServicesChips({required this.services});
+  const ServicesChips({required this.services, super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -345,7 +439,7 @@ class ServicesChips extends StatelessWidget {
         ),
         child: Text(
           'No services listed yet.',
-          style: TextStyle(
+          style: const TextStyle(
             color: kMutedTextColor,
             fontSize: 16,
           ),
@@ -374,7 +468,10 @@ class ServicesChips extends StatelessWidget {
           return Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [kPrimaryBlue.withOpacity(0.8), Color(0xFF667EEA)],
+                colors: [
+                  kPrimaryBlue.withOpacity(0.8),
+                  const Color(0xFF667EEA)
+                ],
               ),
               borderRadius: BorderRadius.circular(25),
               boxShadow: [
@@ -390,7 +487,7 @@ class ServicesChips extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.bolt, color: Colors.white, size: 16),
+                  const Icon(Icons.bolt, color: Colors.white, size: 16),
                   const SizedBox(width: 6),
                   Text(
                     service,
@@ -414,10 +511,11 @@ class ServicesChips extends StatelessWidget {
 class WorkGallery extends StatelessWidget {
   final String providerId;
 
-  const WorkGallery({required this.providerId});
+  const WorkGallery({required this.providerId, super.key});
 
   @override
   Widget build(BuildContext context) {
+    // NOTE: Ensure ProviderService().getProviderGallery is properly implemented
     return FutureBuilder<List<String>>(
       future: ProviderService().getProviderGallery(providerId),
       builder: (context, snapshot) {
@@ -460,7 +558,7 @@ class WorkGallery extends StatelessWidget {
             child: Center(
               child: Text(
                 'No work photos available yet.',
-                style: TextStyle(
+                style: const TextStyle(
                   color: kMutedTextColor,
                   fontSize: 16,
                 ),
@@ -497,7 +595,7 @@ class WorkGallery extends StatelessWidget {
                     children: [
                       Image(
                         image: ImageUtils.getImageProvider(imageUrl) ??
-                            NetworkImage(
+                            const NetworkImage(
                                     'https://via.placeholder.com/160x200/CCCCCC/969696?text=No+Image')
                                 as ImageProvider,
                         fit: BoxFit.cover,
@@ -538,7 +636,7 @@ class WorkGallery extends StatelessWidget {
 class ContactDetails extends StatelessWidget {
   final ProviderModel provider;
 
-  const ContactDetails({required this.provider});
+  const ContactDetails({required this.provider, super.key});
 
   Widget _buildContactItem(IconData icon, String title, String subtitle,
       Color color, VoidCallback onTap) {
@@ -580,7 +678,7 @@ class ContactDetails extends StatelessWidget {
                     children: [
                       Text(
                         title,
-                        style: TextStyle(
+                        style: const TextStyle(
                           color: kDarkTextColor,
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
@@ -589,7 +687,7 @@ class ContactDetails extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         subtitle,
-                        style: TextStyle(
+                        style: const TextStyle(
                           color: kMutedTextColor,
                           fontSize: 14,
                         ),
@@ -612,10 +710,10 @@ class ContactDetails extends StatelessWidget {
 
   void _makePhoneCall(String phoneNumber) async {
     final url = Uri.parse('tel:${_cleanPhoneNumber(phoneNumber)}');
-    if (await canLaunchUrl(url)) {
+    if (await launchUrl(url)) {
       await launchUrl(url);
     } else {
-      throw 'Could not launch $url';
+      // Handle error
     }
   }
 
@@ -623,28 +721,28 @@ class ContactDetails extends StatelessWidget {
     final cleanNumber = _cleanPhoneNumber(whatsappNumber);
     final url = Uri.parse('https://wa.me/$cleanNumber');
 
-    if (await canLaunchUrl(url)) {
+    if (await launchUrl(url)) {
       await launchUrl(url);
     } else {
-      throw 'Could not launch $url';
+      // Handle error
     }
   }
 
   void _openLocationInMaps(String address) async {
+    // Use the provider's address string for a simple map search
     final encodedAddress = Uri.encodeComponent(address);
-    final url = Uri.parse(
-        'https://www.google.com/maps/search/?api=1&query=$encodedAddress');
+    // Universal maps URL for better compatibility
+    final url = Uri.parse('https://maps.apple.com/?q=$encodedAddress');
 
-    if (await canLaunchUrl(url)) {
+    if (await launchUrl(url)) {
       await launchUrl(url);
     } else {
-      // Fallback to generic maps URL
-      final fallbackUrl =
-          Uri.parse('https://maps.google.com/?q=$encodedAddress');
-      if (await canLaunchUrl(fallbackUrl)) {
+      final fallbackUrl = Uri.parse(
+          'https://www.google.com/maps/search/?api=1&query=$encodedAddress');
+      if (await launchUrl(fallbackUrl)) {
         await launchUrl(fallbackUrl);
       } else {
-        throw 'Could not launch maps';
+        // Handle error: Could not launch maps
       }
     }
   }
@@ -676,7 +774,7 @@ class ContactDetails extends StatelessWidget {
           Icons.chat_bubble_rounded,
           'WhatsApp',
           provider.whatsapp,
-          kOfferingColor,
+          kOfferingColor, // Ensure kOfferingColor is accessible
           () => _openWhatsApp(provider.whatsapp),
         ),
       ],
@@ -684,13 +782,14 @@ class ContactDetails extends StatelessWidget {
   }
 }
 
-/// Enhanced Contact Button
+/// Enhanced Contact Button (Fixed at the bottom)
 class ContactButton extends StatelessWidget {
   final ProviderModel provider;
 
-  const ContactButton({required this.provider});
+  const ContactButton({required this.provider, super.key});
 
   void _startChat(BuildContext context) async {
+    // NOTE: This assumes AuthViewModel is available via a Provider at the root of your app
     final authViewModel = Provider.of<AuthViewModel>(context, listen: false);
     final chatService = ChatService();
 
@@ -704,8 +803,7 @@ class ContactButton extends StatelessWidget {
           action: SnackBarAction(
             label: 'Sign In',
             onPressed: () {
-              // Navigate to sign in page
-              // Navigator.push(context, MaterialPageRoute(builder: (_) => SignInPage()));
+              // Add navigation to your sign in page here
             },
           ),
         ),
@@ -714,29 +812,22 @@ class ContactButton extends StatelessWidget {
     }
 
     try {
-      // Create or get existing chat room using your existing ChatService
+      // You need to ensure ProviderModel has a non-null uid
+      if (provider.uid == null) {
+        throw Exception("Provider UID is null.");
+      }
+
       final chatId = await chatService.createChat(
         clientId: authViewModel.currentUser!.uid,
-        providerId: provider.uid!,
+        providerId: provider.uid!, // Add ! to assert non-null
       );
 
-      // Navigate to chat screen - you can use your existing DiscussionPage
-      // Navigator.push(
-      //   context,
-      //   MaterialPageRoute(
-      //     builder: (_) => DiscussionPage(
-      //       contactName: provider.name,
-      //       isOnline: true,
-      //       chatId: chatId,
-      //       currentUserId: authViewModel.currentUser!.uid,
-      //       chatViewModel: ChatViewModel(userId: authViewModel.currentUser!.uid),
-      //     ),
-      //   ),
-      // );
-
+      // --- REPLACE WITH YOUR CHAT NAVIGATION ---
+      // Navigator.push(context, MaterialPageRoute(builder: (_) => DiscussionPage(...)));
+      // For now, show a confirmation snackbar:
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Opening chat with ${provider.name}'),
+          content: Text('Starting chat... Chat ID: $chatId'),
           behavior: SnackBarBehavior.floating,
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -757,10 +848,10 @@ class ContactButton extends StatelessWidget {
 
   void _makePhoneCall(String phoneNumber) async {
     final url = 'tel:${_cleanPhoneNumber(phoneNumber)}';
-    if (await canLaunchUrl(Uri.parse(url))) {
+    if (await launchUrl(Uri.parse(url))) {
       await launchUrl(Uri.parse(url));
     } else {
-      throw 'Could not launch $url';
+      // Handle error
     }
   }
 
@@ -794,7 +885,7 @@ class ContactButton extends StatelessWidget {
               child: Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [kPrimaryBlue, Color(0xFF667EEA)],
+                    colors: [kPrimaryBlue, const Color(0xFF667EEA)],
                   ),
                   borderRadius: BorderRadius.circular(15),
                   boxShadow: [

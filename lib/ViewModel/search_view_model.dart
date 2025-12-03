@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 import '../services/search_service.dart';
 import '../models/ProviderModel.dart';
@@ -51,7 +49,6 @@ class SearchViewModel extends ChangeNotifier {
       _error = 'Échec de la recherche: $e';
       _providerResults = [];
       _serviceResults = [];
-      print('❌ Search error: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -77,7 +74,6 @@ class SearchViewModel extends ChangeNotifier {
     } catch (e) {
       _error = 'Échec de la recherche de prestataires: $e';
       _providerResults = [];
-      print('❌ Provider search error: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -102,7 +98,6 @@ class SearchViewModel extends ChangeNotifier {
     } catch (e) {
       _error = 'Échec de la recherche de services: $e';
       _serviceResults = [];
-      print('❌ Service search error: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -127,7 +122,6 @@ class SearchViewModel extends ChangeNotifier {
     } catch (e) {
       _error = 'Échec de la recherche par catégorie: $e';
       _serviceResults = [];
-      print('❌ Category search error: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -141,21 +135,17 @@ class SearchViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Get all active services and sort by rating
+      // Get all active services
       _serviceResults = await _searchService.searchServices('');
 
-      // Filter and sort
-      _serviceResults = _serviceResults
-          .where((service) => service.rating >= 4.0) // Only highly rated
-          .toList()
-        ..sort((a, b) => b.rating.compareTo(a.rating))
-        ..take(10).toList();
+      // Sort by rating and take top 10
+      _serviceResults.sort((a, b) => b.rating.compareTo(a.rating));
+      _serviceResults = _serviceResults.take(10).toList();
 
       _providerResults = [];
     } catch (e) {
       _error = 'Échec du chargement des services en vedette: $e';
       _serviceResults = [];
-      print('❌ Featured services error: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -167,57 +157,132 @@ class SearchViewModel extends ChangeNotifier {
     if (meters == null) return 'Distance non disponible';
 
     try {
-      // Manual formatting
       if (meters < 1000) {
         return '${meters.toStringAsFixed(0)} m';
       } else {
         return '${(meters / 1000).toStringAsFixed(1)} km';
       }
     } catch (e) {
-      print('❌ Format distance error: $e');
       return 'Distance non disponible';
     }
   }
 
-  /// SEARCH WITH FILTERS - CRITICAL METHOD
+  /// SEARCH WITH FILTERS - UPDATED FOR YOUR DATA STRUCTURE
   Future<void> searchWithFilters(Map<String, dynamic> filters) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      print('🔍 ViewModel: Searching with filters: $filters');
-
-      // Ensure filters use correct field names
       final Map<String, dynamic> convertedFilters = Map.from(filters);
 
-      // Handle backward compatibility for filter names
-      if (convertedFilters.containsKey('service') &&
-          !convertedFilters.containsKey('category')) {
-        convertedFilters['category'] = convertedFilters['service'];
+      // Handle distance filter
+      final hasDistanceFilter =
+          convertedFilters.containsKey('useDistanceFilter') &&
+              convertedFilters['useDistanceFilter'] == true &&
+              convertedFilters.containsKey('userLat') &&
+              convertedFilters.containsKey('userLng');
+
+      if (hasDistanceFilter) {
+        final userLat = convertedFilters['userLat'] as double;
+        final userLng = convertedFilters['userLng'] as double;
+        final maxDistance = convertedFilters['maxDistance'] ?? 20.0;
+
+        // Remove distance filters for the search
+        convertedFilters.remove('userLat');
+        convertedFilters.remove('userLng');
+        convertedFilters.remove('maxDistance');
+        convertedFilters.remove('useDistanceFilter');
+
+        // Get providers with other filters
+        _providerResults =
+            await _searchService.searchProvidersWithFilters(convertedFilters);
+
+        // Apply distance filter
+        _providerResults =
+            _filterByDistance(_providerResults, userLat, userLng, maxDistance);
+      } else {
+        // No distance filter
+        _providerResults =
+            await _searchService.searchProvidersWithFilters(convertedFilters);
       }
 
-      if (convertedFilters.containsKey('subService') &&
-          !convertedFilters.containsKey('subcategory')) {
-        convertedFilters['subcategory'] = convertedFilters['subService'];
-      }
-
-      print('🔍 ViewModel: Using converted filters: $convertedFilters');
-
-      _providerResults =
-          await _searchService.searchProvidersWithFilters(convertedFilters);
       _serviceResults = [];
-
-      print('✅ ViewModel: Found ${_providerResults.length} providers');
     } catch (e) {
       _error = 'Échec de la recherche avec filtres: $e';
       _providerResults = [];
       _serviceResults = [];
-      print('❌❌❌ Filter search error: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  /// Filter providers by distance
+  List<ProviderModel> _filterByDistance(
+    List<ProviderModel> providers,
+    double userLat,
+    double userLng,
+    double maxDistanceKm,
+  ) {
+    return providers.where((provider) {
+      if (provider.location == null) return false;
+
+      final distance = _searchService.calculateDistance(
+        userLat,
+        userLng,
+        provider.location!.latitude,
+        provider.location!.longitude,
+      );
+
+      return distance <= maxDistanceKm;
+    }).toList();
+  }
+
+  /// Calculate distance for a specific provider
+  double? calculateDistanceForProvider(
+    double userLat,
+    double userLng,
+    ProviderModel provider,
+  ) {
+    if (provider.location == null) return null;
+
+    return _searchService.calculateDistance(
+      userLat,
+      userLng,
+      provider.location!.latitude,
+      provider.location!.longitude,
+    );
+  }
+
+  /// Sort providers by distance from user location
+  List<ProviderModel> sortProvidersByDistance(
+    List<ProviderModel> providers,
+    double userLat,
+    double userLng,
+  ) {
+    final providersWithDistance = providers.map((provider) {
+      final distance = provider.location != null
+          ? _searchService.calculateDistance(
+              userLat,
+              userLng,
+              provider.location!.latitude,
+              provider.location!.longitude,
+            )
+          : double.infinity;
+      return {
+        'provider': provider,
+        'distance': distance,
+      };
+    }).toList();
+
+    providersWithDistance.sort((a, b) {
+      return (a['distance'] as double).compareTo(b['distance'] as double);
+    });
+
+    return providersWithDistance
+        .map((item) => item['provider'] as ProviderModel)
+        .toList();
   }
 
   /// Clear error state
@@ -258,14 +323,14 @@ class SearchViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _providerResults = await _searchService.searchProvidersWithFilters({
+      _providerResults =
+          await _searchService.searchProvidersByCategoryWithFilters({
         'category': category,
       });
       _serviceResults = [];
     } catch (e) {
       _error = 'Échec de la recherche de prestataires par catégorie: $e';
       _providerResults = [];
-      print('❌ Providers by category error: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -277,7 +342,6 @@ class SearchViewModel extends ChangeNotifier {
     try {
       return await _searchService.getAvailableCategories();
     } catch (e) {
-      print('❌ Get categories error: $e');
       return {};
     }
   }
@@ -287,7 +351,15 @@ class SearchViewModel extends ChangeNotifier {
     try {
       return await _searchService.getAvailableWilayas();
     } catch (e) {
-      print('❌ Get wilayas error: $e');
+      return [];
+    }
+  }
+
+  /// Get services by provider ID
+  Future<List<Service>> getServicesByProvider(String providerId) async {
+    try {
+      return await _searchService.getServicesByProvider(providerId);
+    } catch (e) {
       return [];
     }
   }

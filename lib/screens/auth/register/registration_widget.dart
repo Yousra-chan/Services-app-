@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:myapp/screens/auth/constants.dart';
 
 const Color kPrimaryBlue = Color(0xFF143EAE);
 const Color kLightBackgroundColor = Color(0xFFF0F4F8);

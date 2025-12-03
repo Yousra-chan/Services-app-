@@ -6,9 +6,9 @@ class CategorySection extends StatefulWidget {
   final Function(CategoryModel) onCategorySelected;
 
   const CategorySection({
-    Key? key,
+    super.key,
     required this.onCategorySelected,
-  }) : super(key: key);
+  });
 
   @override
   State<CategorySection> createState() => _CategorySectionState();

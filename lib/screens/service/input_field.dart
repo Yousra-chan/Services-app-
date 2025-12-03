@@ -24,11 +24,11 @@ class InputField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color _primaryColor = Color(0xFF6366F1);
-    final Color _textPrimary = Color(0xFF1E293B);
-    final Color _textSecondary = Color(0xFF64748B);
+    final Color primaryColor = Color(0xFF6366F1);
+    final Color textPrimary = Color(0xFF1E293B);
+    final Color textSecondary = Color(0xFF64748B);
 
-    Widget _buildSectionHeader(String title, {IconData? icon}) {
+    Widget buildSectionHeader(String title, {IconData? icon}) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -38,10 +38,10 @@ class InputField extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
-                    color: _primaryColor.withOpacity(0.1),
+                    color: primaryColor.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Icon(icon, size: 18, color: _primaryColor),
+                  child: Icon(icon, size: 18, color: primaryColor),
                 ),
                 SizedBox(width: 8),
               ],
@@ -50,7 +50,7 @@ class InputField extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
-                  color: _textPrimary,
+                  color: textPrimary,
                 ),
               ),
             ],
@@ -63,7 +63,7 @@ class InputField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionHeader(label, icon: icon),
+        buildSectionHeader(label, icon: icon),
         Container(
           decoration: BoxDecoration(
             color: Colors.white,
@@ -87,14 +87,14 @@ class InputField extends StatelessWidget {
                   horizontal: 16, vertical: maxLines > 1 ? 16 : 18),
               floatingLabelBehavior: FloatingLabelBehavior.never,
               counterText: '',
-              prefixIcon: Icon(icon, color: _primaryColor),
+              prefixIcon: Icon(icon, color: primaryColor),
             ),
             maxLines: maxLines,
             maxLength: maxLength,
             keyboardType: keyboardType,
             validator: validator,
             style: TextStyle(
-                fontSize: 16, color: _textPrimary, fontWeight: FontWeight.w500),
+                fontSize: 16, color: textPrimary, fontWeight: FontWeight.w500),
           ),
         ),
       ],

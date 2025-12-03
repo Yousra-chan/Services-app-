@@ -10,13 +10,13 @@ class HomeHeader extends StatelessWidget {
   final VoidCallback onNotificationPressed;
 
   const HomeHeader({
-    Key? key,
+    super.key,
     required this.currentUser,
     required this.searchController,
     required this.onSearchChanged,
     required this.notificationCount,
     required this.onNotificationPressed,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

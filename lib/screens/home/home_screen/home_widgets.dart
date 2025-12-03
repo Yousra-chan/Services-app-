@@ -230,12 +230,15 @@ Widget buildModernCategoryItem(
 // Simple icon helper
 IconData _getSimpleIcon(String categoryName) {
   final name = categoryName.toLowerCase();
-  if (name.contains('teach') || name.contains('tutor'))
+  if (name.contains('teach') || name.contains('tutor')) {
     return CupertinoIcons.pencil;
-  if (name.contains('health') || name.contains('medical'))
+  }
+  if (name.contains('health') || name.contains('medical')) {
     return CupertinoIcons.heart_fill;
-  if (name.contains('car') || name.contains('mechanic'))
+  }
+  if (name.contains('car') || name.contains('mechanic')) {
     return CupertinoIcons.car_fill;
+  }
   if (name.contains('clean')) return CupertinoIcons.sparkles;
   if (name.contains('plumb')) return CupertinoIcons.wrench_fill;
   if (name.contains('electric')) return CupertinoIcons.bolt_fill;

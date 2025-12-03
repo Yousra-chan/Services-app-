@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
-import 'home_constants.dart';
 
 class CreateServiceButton extends StatelessWidget {
   final VoidCallback onPressed;
   final bool isProvider;
 
   const CreateServiceButton({
-    Key? key,
+    super.key,
     required this.onPressed,
     required this.isProvider,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

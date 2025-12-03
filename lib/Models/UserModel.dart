@@ -21,6 +21,10 @@ class UserModel {
   final Timestamp? fcmTokenUpdatedAt;
   final List<String> chatIds;
 
+  // Location fields
+  final String? wilaya;
+  final String? commune;
+
   UserModel({
     required this.uid,
     required this.name,
@@ -41,6 +45,10 @@ class UserModel {
     this.subscriptionActive = false,
     this.fcmTokenUpdatedAt,
     this.chatIds = const [],
+
+    // Location fields
+    this.wilaya,
+    this.commune,
   });
 
   Map<String, dynamic> toMap() {
@@ -64,6 +72,10 @@ class UserModel {
       'subscriptionActive': subscriptionActive,
       'fcmTokenUpdatedAt': fcmTokenUpdatedAt,
       'chatIds': chatIds,
+
+      // Location fields
+      'wilaya': wilaya,
+      'commune': commune,
     };
   }
 
@@ -88,6 +100,10 @@ class UserModel {
       subscriptionActive: data['subscriptionActive'] ?? false,
       fcmTokenUpdatedAt: data['fcmTokenUpdatedAt'],
       chatIds: List<String>.from(data['chatIds'] ?? []),
+
+      // Location fields
+      wilaya: data['wilaya'],
+      commune: data['commune'],
     );
   }
 
@@ -109,6 +125,8 @@ class UserModel {
     bool? subscriptionActive,
     Timestamp? fcmTokenUpdatedAt,
     List<String>? chatIds,
+    String? wilaya,
+    String? commune,
   }) {
     return UserModel(
       uid: uid ?? this.uid,
@@ -128,6 +146,8 @@ class UserModel {
       subscriptionActive: subscriptionActive ?? this.subscriptionActive,
       fcmTokenUpdatedAt: fcmTokenUpdatedAt ?? this.fcmTokenUpdatedAt,
       chatIds: chatIds ?? this.chatIds,
+      wilaya: wilaya ?? this.wilaya,
+      commune: commune ?? this.commune,
     );
   }
 

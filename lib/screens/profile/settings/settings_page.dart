@@ -15,9 +15,9 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   // Local state for switch tiles
-  bool _darkModeEnabled = false;
-  bool _sendReadReceipts = true;
-  bool _offlineMode = false;
+  final bool _darkModeEnabled = false;
+  final bool _sendReadReceipts = true;
+  final bool _offlineMode = false;
 
   @override
   Widget build(BuildContext context) {

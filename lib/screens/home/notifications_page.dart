@@ -1,4 +1,5 @@
 // screens/home/notifications_page.dart
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:myapp/ViewModel/auth_view_model.dart' show AuthViewModel;
@@ -6,8 +7,8 @@ import 'package:myapp/ViewModel/chat_view_model.dart' show ChatViewModel;
 import 'package:myapp/screens/chat/disscussion/disscussion_page.dart';
 import 'package:provider/provider.dart';
 import 'home_screen/home_constants.dart';
-import 'package:myapp/services/firebase_service.dart'; // ADD THIS
-import 'package:myapp/models/notification_item.dart'; // ADD THIS
+import 'package:myapp/services/firebase_service.dart';
+import 'package:myapp/models/notification_item.dart';
 
 class NotificationsWindow extends StatefulWidget {
   const NotificationsWindow({super.key});
@@ -36,7 +37,9 @@ class _NotificationsWindowState extends State<NotificationsWindow> {
 
     if (_currentUserId != null && _currentUserId!.isNotEmpty) {
       _notificationsStream =
-          FirebaseService.getUserNotifications(_currentUserId!);
+          Stream.periodic(Duration(seconds: 1)) // Polling for testing
+              .asyncMap((_) => _fetchNotifications())
+              .takeWhile((_) => mounted);
       print('✅ Notifications stream started');
     } else {
       _notificationsStream = Stream.value([]);
@@ -44,16 +47,73 @@ class _NotificationsWindowState extends State<NotificationsWindow> {
     }
   }
 
-  void _markAsRead(String id) {
-    print('🔔 Marking notification as read: $id');
-    FirebaseService.markNotificationAsRead(id);
+  Future<List<HomeNotificationItem>> _fetchNotifications() async {
+    try {
+      if (_currentUserId == null) return [];
+
+      final snapshot = await FirebaseFirestore.instance
+          .collection('notifications')
+          .where('userId', isEqualTo: _currentUserId)
+          .orderBy('time', descending: true)
+          .limit(50)
+          .get();
+
+      return snapshot.docs
+          .map((doc) => HomeNotificationItem.fromFirestore(doc))
+          .toList();
+    } catch (e) {
+      print('❌ Error fetching notifications: $e');
+      return [];
+    }
   }
 
+// Update these methods in your notifications_page.dart
+
+  void _markAsReadAndDelete(String id) {
+    print('🔔 Deleting notification: $id');
+
+    // Option 1: Direct Firestore delete (recommended for immediate deletion)
+    FirebaseFirestore.instance
+        .collection('notifications')
+        .doc(id)
+        .delete()
+        .then((_) => print('🗑️ Notification deleted: $id'))
+        .catchError((e) => print('❌ Error deleting notification: $e'));
+  }
+
+  void _deleteNotificationsForChat(String chatId) {
+    if (_currentUserId != null && chatId.isNotEmpty) {
+      // Direct Firestore query and delete
+      FirebaseFirestore.instance
+          .collection('notifications')
+          .where('userId', isEqualTo: _currentUserId!)
+          .where('chatId', isEqualTo: chatId)
+          .where('isRead', isEqualTo: false)
+          .get()
+          .then((snapshot) {
+            final batch = FirebaseFirestore.instance.batch();
+            for (final doc in snapshot.docs) {
+              batch.delete(doc.reference);
+            }
+            return batch.commit();
+          })
+          .then((_) => print('🗑️ Deleted notifications for chat: $chatId'))
+          .catchError((e) => print('❌ Error deleting notifications: $e'));
+    }
+  }
+
+// Update your _navigateToChat method to use the new methods:
   void _navigateToChat(
       BuildContext context, HomeNotificationItem notification) {
     if (notification.chatId != null && _currentUserId != null) {
-      // Mark notification as read
-      _markAsRead(notification.id);
+      // Delete this specific notification
+      _markAsReadAndDelete(notification.id);
+
+      // Also reset message count for this sender (optional)
+      if (notification.senderId != null) {
+        FirebaseService.resetMessageCount(
+            _currentUserId!, notification.senderId!);
+      }
 
       // Close notifications window
       Navigator.of(context).pop();
@@ -66,7 +126,9 @@ class _NotificationsWindowState extends State<NotificationsWindow> {
             create: (context) => ChatViewModel(userId: _currentUserId!),
             child: DiscussionPage(
               contactName: notification.senderName ??
-                  notification.title.replaceAll('New message from ', ''),
+                  notification.title
+                      .replaceAll('New message from ', '')
+                      .replaceAll(RegExp(r' \(\d+ new\)'), ''),
               isOnline: true,
               chatId: notification.chatId!,
               currentUserId: _currentUserId!,
@@ -215,17 +277,20 @@ class _NotificationsWindowState extends State<NotificationsWindow> {
                       return _buildEmptyState();
                     }
 
-                    // In the StreamBuilder, update the ListView padding
-                    return ListView.builder(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8), // Reduced vertical padding
-                      itemCount: notifications.length,
-                      itemBuilder: (context, index) {
-                        final notification = notifications[index];
-                        return _buildNotificationCard(
-                            notification, context, index);
+                    return RefreshIndicator(
+                      onRefresh: () async {
+                        setState(() {});
                       },
+                      child: ListView.builder(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        itemCount: notifications.length,
+                        itemBuilder: (context, index) {
+                          final notification = notifications[index];
+                          return _buildNotificationCard(
+                              notification, context, index);
+                        },
+                      ),
                     );
                   },
                 ),
@@ -255,7 +320,7 @@ class _NotificationsWindowState extends State<NotificationsWindow> {
     return AnimatedContainer(
       duration: Duration(milliseconds: 300 + (index * 100)),
       curve: Curves.easeOut,
-      margin: const EdgeInsets.only(bottom: 8), // Reduced from 12
+      margin: const EdgeInsets.only(bottom: 8),
       child: Material(
         elevation: notification.isRead ? 2 : 4,
         borderRadius: BorderRadius.circular(16),
@@ -296,46 +361,84 @@ class _NotificationsWindowState extends State<NotificationsWindow> {
               if (notification.type == HomeNotificationType.message) {
                 _navigateToChat(context, notification);
               } else {
-                _markAsRead(notification.id);
+                _markAsReadAndDelete(notification.id);
               }
             },
+            onLongPress: () {
+              // Optional: Show delete confirmation
+              _showDeleteDialog(context, notification);
+            },
             child: Container(
-              padding: const EdgeInsets.all(12), // Reduced from 16
+              padding: const EdgeInsets.all(12),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Colorful Icon Container
-                  Container(
-                    width: 40, // Reduced from 48
-                    height: 40, // Reduced from 48
-                    margin: const EdgeInsets.only(right: 12),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: colors,
-                      ),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: colors[0].withOpacity(0.4),
-                          blurRadius: 8,
-                          offset: const Offset(0, 4),
+                  // Colorful Icon Container with message count badge
+                  Stack(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        margin: const EdgeInsets.only(right: 12),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: colors,
+                          ),
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: colors[0].withOpacity(0.4),
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                    child: Icon(
-                      notification.icon,
-                      color: Colors.white,
-                      size: 18, // Reduced from 20
-                    ),
+                        child: Icon(
+                          notification.icon,
+                          color: Colors.white,
+                          size: 18,
+                        ),
+                      ),
+                      // Message count badge
+                      if (notification.type == HomeNotificationType.message &&
+                          notification.messageCount > 1)
+                        Positioned(
+                          top: -2,
+                          right: 8,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 4, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                              border:
+                                  Border.all(color: Colors.white, width: 1.5),
+                            ),
+                            constraints: const BoxConstraints(
+                              minWidth: 16,
+                              minHeight: 16,
+                            ),
+                            child: Text(
+                              '${notification.messageCount}',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 8,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
 
                   // Notification Content
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min, // ADD THIS
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         // Title and Time Row
                         Row(
@@ -344,36 +447,37 @@ class _NotificationsWindowState extends State<NotificationsWindow> {
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min, // ADD THIS
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Text(
-                                    notification.title,
+                                    notification
+                                        .formattedTitle, // Use formatted title
                                     style: TextStyle(
                                       color: notification.isRead
                                           ? kDarkTextColor
                                           : colors[0],
-                                      fontSize: 14, // Reduced from 15
+                                      fontSize: 14,
                                       fontWeight: notification.isRead
                                           ? FontWeight.w600
-                                          : FontWeight.w700, // Reduced from 800
+                                          : FontWeight.w700,
                                       fontFamily: 'Exo2',
                                     ),
-                                    maxLines: 1, // ADD THIS
-                                    overflow: TextOverflow.ellipsis, // ADD THIS
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                  const SizedBox(height: 4), // Reduced from 6
+                                  const SizedBox(height: 4),
                                   Text(
                                     notification.message,
                                     style: TextStyle(
                                       color: notification.isRead
                                           ? kMutedTextColor
                                           : colors[0].withOpacity(0.8),
-                                      fontSize: 12, // Reduced from 13
+                                      fontSize: 12,
                                       fontWeight: notification.isRead
                                           ? FontWeight.normal
-                                          : FontWeight.w500, // Reduced from 600
+                                          : FontWeight.w500,
                                       fontFamily: 'Exo2',
-                                      height: 1.2, // Reduced from 1.3
+                                      height: 1.2,
                                     ),
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
@@ -384,11 +488,11 @@ class _NotificationsWindowState extends State<NotificationsWindow> {
                             const SizedBox(width: 8),
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.end,
-                              mainAxisSize: MainAxisSize.min, // ADD THIS
+                              mainAxisSize: MainAxisSize.min,
                               children: [
                                 Container(
                                   padding: const EdgeInsets.symmetric(
-                                      horizontal: 6, vertical: 3), // Reduced
+                                      horizontal: 6, vertical: 3),
                                   decoration: BoxDecoration(
                                     color: notification.isRead
                                         ? Colors.grey.withOpacity(0.1)
@@ -396,25 +500,24 @@ class _NotificationsWindowState extends State<NotificationsWindow> {
                                     borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: Text(
-                                    _formatTime(notification.time),
+                                    _formatTime(notification.lastMessageTime),
                                     style: TextStyle(
                                       color: notification.isRead
                                           ? kMutedTextColor
                                           : colors[0],
-                                      fontSize: 9, // Reduced from 10
+                                      fontSize: 9,
                                       fontWeight: notification.isRead
                                           ? FontWeight.normal
-                                          : FontWeight.w500, // Reduced from 600
+                                          : FontWeight.w500,
                                       fontFamily: 'Exo2',
                                     ),
                                   ),
                                 ),
                                 if (!notification.isRead)
                                   Container(
-                                    margin: const EdgeInsets.only(
-                                        top: 4), // Reduced
+                                    margin: const EdgeInsets.only(top: 4),
                                     padding: const EdgeInsets.symmetric(
-                                        horizontal: 4, vertical: 1), // Reduced
+                                        horizontal: 4, vertical: 1),
                                     decoration: BoxDecoration(
                                       color: Colors.red,
                                       borderRadius: BorderRadius.circular(4),
@@ -423,7 +526,7 @@ class _NotificationsWindowState extends State<NotificationsWindow> {
                                       'NEW',
                                       style: TextStyle(
                                         color: Colors.white,
-                                        fontSize: 7, // Reduced from 8
+                                        fontSize: 7,
                                         fontWeight: FontWeight.w800,
                                         fontFamily: 'Exo2',
                                       ),
@@ -438,14 +541,12 @@ class _NotificationsWindowState extends State<NotificationsWindow> {
                         if (notification.type == HomeNotificationType.message &&
                             notification.actionText.isNotEmpty)
                           Padding(
-                            padding: const EdgeInsets.only(
-                                top: 8), // Reduced from 12
+                            padding: const EdgeInsets.only(top: 8),
                             child: SizedBox(
                               width: double.infinity,
                               child: Material(
-                                borderRadius:
-                                    BorderRadius.circular(8), // Reduced
-                                elevation: 1, // Reduced
+                                borderRadius: BorderRadius.circular(8),
+                                elevation: 1,
                                 child: Container(
                                   decoration: BoxDecoration(
                                     gradient: LinearGradient(
@@ -453,13 +554,12 @@ class _NotificationsWindowState extends State<NotificationsWindow> {
                                       end: Alignment.bottomRight,
                                       colors: colors,
                                     ),
-                                    borderRadius:
-                                        BorderRadius.circular(8), // Reduced
+                                    borderRadius: BorderRadius.circular(8),
                                     boxShadow: [
                                       BoxShadow(
                                         color: colors[0].withOpacity(0.3),
-                                        blurRadius: 4, // Reduced
-                                        offset: const Offset(0, 2), // Reduced
+                                        blurRadius: 4,
+                                        offset: const Offset(0, 2),
                                       ),
                                     ],
                                   ),
@@ -470,8 +570,7 @@ class _NotificationsWindowState extends State<NotificationsWindow> {
                                     style: TextButton.styleFrom(
                                       backgroundColor: Colors.transparent,
                                       padding: const EdgeInsets.symmetric(
-                                          vertical: 6,
-                                          horizontal: 12), // Reduced
+                                          vertical: 6, horizontal: 12),
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(8),
                                       ),
@@ -486,16 +585,16 @@ class _NotificationsWindowState extends State<NotificationsWindow> {
                                           notification.actionText,
                                           style: const TextStyle(
                                             color: Colors.white,
-                                            fontSize: 12, // Reduced from 13
+                                            fontSize: 12,
                                             fontWeight: FontWeight.w600,
                                             fontFamily: 'Exo2',
                                           ),
                                         ),
-                                        const SizedBox(width: 4), // Reduced
+                                        const SizedBox(width: 4),
                                         const Icon(
                                           Icons.arrow_forward_rounded,
                                           color: Colors.white,
-                                          size: 12, // Reduced from 14
+                                          size: 12,
                                         ),
                                       ],
                                     ),
@@ -512,6 +611,31 @@ class _NotificationsWindowState extends State<NotificationsWindow> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  void _showDeleteDialog(
+      BuildContext context, HomeNotificationItem notification) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Notification'),
+        content:
+            const Text('Are you sure you want to delete this notification?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              _markAsReadAndDelete(notification.id);
+              Navigator.pop(context);
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
       ),
     );
   }
@@ -560,22 +684,21 @@ class _NotificationsWindowState extends State<NotificationsWindow> {
 
   Widget _buildErrorState(String error) {
     return SingleChildScrollView(
-      // WRAP with SingleChildScrollView
       child: Center(
         child: Padding(
-          padding: const EdgeInsets.all(16), // Reduced from 24
+          padding: const EdgeInsets.all(16),
           child: Container(
-            padding: const EdgeInsets.all(20), // Reduced from 24
+            padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [Color(0xFFFD746C), Color(0xFFFF9068)],
               ),
-              borderRadius: BorderRadius.circular(16), // Reduced from 20
+              borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
                   color: Colors.red.withOpacity(0.3),
-                  blurRadius: 10, // Reduced from 15
-                  offset: const Offset(0, 5), // Reduced from 8
+                  blurRadius: 10,
+                  offset: const Offset(0, 5),
                 ),
               ],
             ),
@@ -583,7 +706,7 @@ class _NotificationsWindowState extends State<NotificationsWindow> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  padding: const EdgeInsets.all(12), // Reduced from 16
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.2),
                     shape: BoxShape.circle,
@@ -591,18 +714,36 @@ class _NotificationsWindowState extends State<NotificationsWindow> {
                   child: const Icon(
                     CupertinoIcons.exclamationmark_circle_fill,
                     color: Colors.white,
-                    size: 32, // Reduced from 40
+                    size: 32,
                   ),
                 ),
-                const SizedBox(height: 16), // Reduced from 20
+                const SizedBox(height: 16),
                 const Text(
                   'Oops!',
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: 20, // Reduced from 24
+                    fontSize: 20,
                     fontWeight: FontWeight.w700,
                     fontFamily: 'Exo2',
                   ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Error loading notifications',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.9),
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  error,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.7),
+                    fontSize: 10,
+                  ),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
@@ -612,19 +753,13 @@ class _NotificationsWindowState extends State<NotificationsWindow> {
     );
   }
 
-  void _refreshNotifications() {
-    // This will force the stream to reload
-    setState(() {});
-  }
-
   Widget _buildEmptyState() {
     return SingleChildScrollView(
-      // WRAP with SingleChildScrollView
       child: Center(
         child: Padding(
-          padding: const EdgeInsets.all(20), // Reduced from 32
+          padding: const EdgeInsets.all(20),
           child: Container(
-            padding: const EdgeInsets.all(24), // Reduced from 32
+            padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
@@ -634,7 +769,7 @@ class _NotificationsWindowState extends State<NotificationsWindow> {
                   Color(0xFF764BA2).withOpacity(0.05),
                 ],
               ),
-              borderRadius: BorderRadius.circular(20), // Reduced from 24
+              borderRadius: BorderRadius.circular(20),
               border: Border.all(
                 color: kPrimaryBlue.withOpacity(0.1),
                 width: 2,
@@ -644,8 +779,8 @@ class _NotificationsWindowState extends State<NotificationsWindow> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  width: 60, // Reduced from 80
-                  height: 60, // Reduced from 80
+                  width: 60,
+                  height: 60,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [kPrimaryBlue, Color(0xFF667EEA)],
@@ -654,55 +789,54 @@ class _NotificationsWindowState extends State<NotificationsWindow> {
                     boxShadow: [
                       BoxShadow(
                         color: kPrimaryBlue.withOpacity(0.3),
-                        blurRadius: 10, // Reduced from 15
-                        offset: const Offset(0, 5), // Reduced from 8
+                        blurRadius: 10,
+                        offset: const Offset(0, 5),
                       ),
                     ],
                   ),
                   child: const Icon(
                     CupertinoIcons.bell_slash,
                     color: Colors.white,
-                    size: 28, // Reduced from 35
+                    size: 28,
                   ),
                 ),
-                const SizedBox(height: 16), // Reduced from 24
+                const SizedBox(height: 16),
                 const Text(
                   'All Caught Up! 🎉',
                   style: TextStyle(
                     color: kDarkTextColor,
-                    fontSize: 18, // Reduced from 22
+                    fontSize: 18,
                     fontWeight: FontWeight.w700,
                     fontFamily: 'Exo2',
                   ),
                 ),
-                const SizedBox(height: 8), // Reduced from 12
+                const SizedBox(height: 8),
                 const Padding(
-                  padding:
-                      EdgeInsets.symmetric(horizontal: 16), // Reduced from 20
+                  padding: EdgeInsets.symmetric(horizontal: 16),
                   child: Text(
                     'No new notifications right now. You\'re all up to date with your messages, reminders, and updates.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: kMutedTextColor,
-                      fontSize: 13, // Reduced from 14
+                      fontSize: 13,
                       fontFamily: 'Exo2',
-                      height: 1.3, // Reduced from 1.4
+                      height: 1.3,
                     ),
                   ),
                 ),
-                const SizedBox(height: 16), // Reduced from 20
+                const SizedBox(height: 16),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 6), // Reduced
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     color: kPrimaryBlue.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8), // Reduced from 12
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
                     'Come back later for updates',
                     style: TextStyle(
                       color: kPrimaryBlue,
-                      fontSize: 11, // Reduced from 12
+                      fontSize: 11,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -741,11 +875,20 @@ class _NotificationsWindowState extends State<NotificationsWindow> {
   }
 }
 
-// How to use it from your home screen:
 void showNotificationsWindow(BuildContext context) {
   showDialog(
     context: context,
-    builder: (context) => const NotificationsWindow(),
-    barrierColor: Colors.black54,
+    builder: (context) {
+      return Material(
+        type: MaterialType.transparency, // THIS IS KEY
+        child: Center(
+          child: Container(
+            margin: EdgeInsets.all(20),
+            child: NotificationsWindow(),
+          ),
+        ),
+      );
+    },
+    barrierColor: Colors.transparent,
   );
 }

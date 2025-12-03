@@ -1,4 +1,5 @@
-import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
+import 'package:cloud_firestore/cloud_firestore.dart'
+    show Timestamp, DocumentSnapshot;
 
 class Service {
   final String id;
@@ -56,10 +57,8 @@ class Service {
       'latitude': latitude,
       'longitude': longitude,
       'isActive': isActive,
-      'createdAt':
-          Timestamp.fromDate(createdAt), // Convert to Firestore Timestamp
-      'updatedAt':
-          Timestamp.fromDate(updatedAt), // Convert to Firestore Timestamp
+      'createdAt': Timestamp.fromDate(createdAt),
+      'updatedAt': Timestamp.fromDate(updatedAt),
       'rating': rating,
       'totalReviews': totalReviews,
       'tags': tags,
@@ -101,6 +100,12 @@ class Service {
     );
   }
 
+  // Factory from Firestore document
+  factory Service.fromFirestore(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    return Service.fromMap({...data, 'id': doc.id});
+  }
+
   String get displayPrice {
     return '$price DZD $priceUnit';
   }
@@ -111,4 +116,46 @@ class Service {
   }
 
   bool get hasLocation => latitude != null && longitude != null;
+
+  Service copyWith({
+    String? id,
+    String? providerId,
+    String? title,
+    String? description,
+    String? category,
+    String? subcategory,
+    double? price,
+    String? priceUnit,
+    List<String>? images,
+    String? location,
+    double? latitude,
+    double? longitude,
+    bool? isActive,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    double? rating,
+    int? totalReviews,
+    List<String>? tags,
+  }) {
+    return Service(
+      id: id ?? this.id,
+      providerId: providerId ?? this.providerId,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      category: category ?? this.category,
+      subcategory: subcategory ?? this.subcategory,
+      price: price ?? this.price,
+      priceUnit: priceUnit ?? this.priceUnit,
+      images: images ?? this.images,
+      location: location ?? this.location,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      isActive: isActive ?? this.isActive,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rating: rating ?? this.rating,
+      totalReviews: totalReviews ?? this.totalReviews,
+      tags: tags ?? this.tags,
+    );
+  }
 }

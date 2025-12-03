@@ -8,10 +8,10 @@ class SubcategorySection extends StatefulWidget {
   final Function(SubcategoryModel) onSubcategorySelected;
 
   const SubcategorySection({
-    Key? key,
+    super.key,
     required this.selectedCategory,
     required this.onSubcategorySelected,
-  }) : super(key: key);
+  });
 
   @override
   State<SubcategorySection> createState() => _SubcategorySectionState();

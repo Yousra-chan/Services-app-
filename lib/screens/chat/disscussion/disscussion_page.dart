@@ -4,9 +4,11 @@ import 'package:flutter/cupertino.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:myapp/ViewModel/chat_view_model.dart';
 import 'package:myapp/models/MessageModel.dart';
+import 'package:myapp/models/ProviderModel.dart';
 import 'package:myapp/screens/chat/disscussion/disscussion_constants.dart';
-import 'package:myapp/screens/chat/disscussion/discussion_widgets.dart';
 import 'package:intl/intl.dart';
+import 'package:myapp/screens/home/providers_list/provider_profile_screen.dart';
+import 'package:myapp/services/provider_service.dart';
 import 'package:myapp/utils/image_utils.dart';
 import 'package:http/http.dart' as http;
 
@@ -17,6 +19,7 @@ class DiscussionPage extends StatefulWidget {
   final String currentUserId;
   final ChatViewModel chatViewModel;
   final String? profileImageUrl;
+  final String? contactUserId;
 
   const DiscussionPage({
     super.key,
@@ -26,6 +29,7 @@ class DiscussionPage extends StatefulWidget {
     required this.currentUserId,
     required this.chatViewModel,
     this.profileImageUrl,
+    this.contactUserId,
   });
 
   @override
@@ -40,15 +44,34 @@ class _DiscussionPageState extends State<DiscussionPage> {
   StreamSubscription? _messagesSubscription;
   String? _currentUserProfileImageUrl;
   String? _contactProfileImageUrl;
+  String? _contactUserId;
 
   @override
   void initState() {
     super.initState();
     _loadMessages();
     _loadProfileImages();
+    _extractContactUserId(); // Extract contact ID
     _messageController.addListener(() {
       if (mounted) setState(() {});
     });
+  }
+
+  void _extractContactUserId() {
+    // If contactUserId is provided, use it
+    if (widget.contactUserId != null && widget.contactUserId!.isNotEmpty) {
+      _contactUserId = widget.contactUserId;
+      return;
+    }
+
+    // Otherwise, try to extract it from chatId
+    final participants = widget.chatId.split('_');
+    if (participants.length >= 2) {
+      _contactUserId = participants.firstWhere(
+        (id) => id != widget.currentUserId,
+        orElse: () => participants.isNotEmpty ? participants[0] : '',
+      );
+    }
   }
 
   void _loadMessages() {
@@ -71,7 +94,59 @@ class _DiscussionPageState extends State<DiscussionPage> {
     });
   }
 
-// With proper error handling:
+  void _navigateToUserProfile(String userId) async {
+    if (userId.isEmpty) return;
+
+    try {
+      // First fetch the provider data
+      final providerService = ProviderService();
+      final ProviderModel? provider =
+          await providerService.getProviderById(userId);
+
+      if (provider != null && mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ProviderProfileScreen(
+              provider: provider, // Only this parameter is required
+            ),
+          ),
+        );
+      } else {
+        // Handle case where provider not found
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Provider not found'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      // Handle error
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error loading profile: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  String _getCategoryFromProfession(String profession) {
+    final lower = profession.toLowerCase();
+
+    if (lower.contains('plomb')) return 'plomberie';
+    if (lower.contains('électr')) return 'électricité';
+    if (lower.contains('menuis')) return 'menuserie';
+    if (lower.contains('peint')) return 'peinture';
+    if (lower.contains('jardin')) return 'jardinage';
+    if (lower.contains('médec')) return 'santé';
+    if (lower.contains('profess')) return 'éducation';
+    if (lower.contains('déménag')) return 'déménagement';
+
+    return 'général';
+  }
+
   void _loadProfileImages() async {
     try {
       // Load current user's profile image
@@ -83,24 +158,21 @@ class _DiscussionPageState extends State<DiscussionPage> {
         });
       }
 
-      // Load contact's profile image if not provided
-      if (widget.profileImageUrl == null || widget.profileImageUrl!.isEmpty) {
-        // Extract contact ID from chatId (chatId format: "id1_id2")
-        final participants = widget.chatId.split('_');
-        final otherUserId = participants.firstWhere(
-            (id) => id != widget.currentUserId,
-            orElse: () => participants.isNotEmpty ? participants[0] : '');
+      // Determine contact user ID
+      final contactUserId =
+          _contactUserId ?? (widget.contactUserId ?? _extractUserIdFromChat());
 
-        if (otherUserId.isNotEmpty) {
-          final contactImage =
-              await widget.chatViewModel.getUserProfileImageUrl(otherUserId);
-          if (mounted) {
-            setState(() {
-              _contactProfileImageUrl = contactImage;
-            });
-          }
+      // Load contact's profile image
+      if (contactUserId != null && contactUserId.isNotEmpty) {
+        final contactImage =
+            await widget.chatViewModel.getUserProfileImageUrl(contactUserId);
+        if (mounted) {
+          setState(() {
+            _contactProfileImageUrl = contactImage;
+          });
         }
-      } else {
+      } else if (widget.profileImageUrl != null &&
+          widget.profileImageUrl!.isNotEmpty) {
         // Use the provided profile image
         if (mounted) {
           setState(() {
@@ -109,8 +181,19 @@ class _DiscussionPageState extends State<DiscussionPage> {
         }
       }
     } catch (e) {
-      print('❌ Error loading profile images: $e');
+      // Handle error silently
     }
+  }
+
+  String? _extractUserIdFromChat() {
+    final participants = widget.chatId.split('_');
+    if (participants.length >= 2) {
+      return participants.firstWhere(
+        (id) => id != widget.currentUserId,
+        orElse: () => participants.isNotEmpty ? participants[0] : '',
+      );
+    }
+    return null;
   }
 
   void _sendMessage() async {
@@ -200,42 +283,86 @@ class _DiscussionPageState extends State<DiscussionPage> {
       }
       return false;
     } catch (e) {
-      print('❌ Image validation error: $e');
       return false;
     }
   }
 
-  Widget _buildContactAvatar(String? profileImageUrl, String contactName) {
-    // Use the loaded contact profile image or fallback to provided one
+  Widget _buildContactAvatar(
+      String? profileImageUrl, String contactName, String? contactId) {
     final imageUrl = _contactProfileImageUrl ?? profileImageUrl;
     final imageProvider = ImageUtils.getImageProvider(imageUrl);
     final String displayInitial =
         contactName.isNotEmpty ? contactName[0].toUpperCase() : '?';
 
-    return Container(
-      width: 44,
-      height: 44,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: Colors.white54,
-          width: 2,
+    return GestureDetector(
+      onTap: contactId != null && contactId.isNotEmpty
+          ? () => _navigateToUserProfile(contactId)
+          : null,
+      child: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: Colors.white54,
+            width: 2,
+          ),
+        ),
+        child: CircleAvatar(
+          radius: 20,
+          backgroundColor: Colors.white.withOpacity(0.2),
+          backgroundImage: imageProvider,
+          child: imageProvider == null
+              ? Text(
+                  displayInitial,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                )
+              : _buildAvatarLoadingFallback(imageUrl!, displayInitial),
         ),
       ),
-      child: CircleAvatar(
-        radius: 20,
-        backgroundColor: Colors.white.withOpacity(0.2),
-        backgroundImage: imageProvider,
-        child: imageProvider == null
-            ? Text(
-                displayInitial,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              )
-            : _buildAvatarLoadingFallback(imageUrl!, displayInitial),
+    );
+  }
+
+  Widget _buildMessageAvatar(bool isCurrentUser, String userId) {
+    final profileImageUrl =
+        isCurrentUser ? _currentUserProfileImageUrl : _contactProfileImageUrl;
+    final imageProvider = ImageUtils.getImageProvider(profileImageUrl);
+
+    return GestureDetector(
+      onTap: userId.isNotEmpty ? () => _navigateToUserProfile(userId) : null,
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: Colors.white,
+            width: 2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: CircleAvatar(
+          radius: 16,
+          backgroundColor: kPrimaryBlue.withOpacity(0.1),
+          backgroundImage: imageProvider,
+          child: imageProvider == null
+              ? Icon(
+                  CupertinoIcons.person_fill,
+                  color: kPrimaryBlue,
+                  size: 18,
+                )
+              : _buildMessageAvatarLoadingFallback(profileImageUrl!),
+        ),
       ),
     );
   }
@@ -308,8 +435,9 @@ class _DiscussionPageState extends State<DiscussionPage> {
 
           const SizedBox(width: 12),
 
-          // Enhanced contact avatar with base64 support
-          _buildContactAvatar(widget.profileImageUrl, widget.contactName),
+          // Enhanced contact avatar with base64 support - NOW WITH contactId
+          _buildContactAvatar(widget.profileImageUrl, widget.contactName,
+              _contactUserId ?? widget.contactUserId),
 
           const SizedBox(width: 12),
 
@@ -386,43 +514,6 @@ class _DiscussionPageState extends State<DiscussionPage> {
     );
   }
 
-  Widget _buildMessageAvatar(bool isCurrentUser) {
-    final profileImageUrl =
-        isCurrentUser ? _currentUserProfileImageUrl : _contactProfileImageUrl;
-    final imageProvider = ImageUtils.getImageProvider(profileImageUrl);
-
-    return Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: Colors.white,
-          width: 2,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: CircleAvatar(
-        radius: 16,
-        backgroundColor: kPrimaryBlue.withOpacity(0.1),
-        backgroundImage: imageProvider,
-        child: imageProvider == null
-            ? Icon(
-                CupertinoIcons.person_fill,
-                color: kPrimaryBlue,
-                size: 18,
-              )
-            : _buildMessageAvatarLoadingFallback(profileImageUrl!),
-      ),
-    );
-  }
-
   Widget _buildMessageAvatarLoadingFallback(String imageUrl) {
     return FutureBuilder<bool>(
       future: _checkImageValidity(imageUrl),
@@ -451,23 +542,26 @@ class _DiscussionPageState extends State<DiscussionPage> {
     final imageProvider =
         ImageUtils.getImageProvider(_currentUserProfileImageUrl);
 
-    return Container(
-      width: 28,
-      height: 28,
-      decoration: const BoxDecoration(
-        shape: BoxShape.circle,
-      ),
-      child: CircleAvatar(
-        radius: 14,
-        backgroundColor: Colors.transparent,
-        backgroundImage: imageProvider,
-        child: imageProvider == null
-            ? Icon(
-                CupertinoIcons.person_fill,
-                color: Colors.white,
-                size: 14,
-              )
-            : null,
+    return GestureDetector(
+      onTap: () => _navigateToUserProfile(widget.currentUserId),
+      child: Container(
+        width: 28,
+        height: 28,
+        decoration: const BoxDecoration(
+          shape: BoxShape.circle,
+        ),
+        child: CircleAvatar(
+          radius: 14,
+          backgroundColor: Colors.transparent,
+          backgroundImage: imageProvider,
+          child: imageProvider == null
+              ? Icon(
+                  CupertinoIcons.person_fill,
+                  color: Colors.white,
+                  size: 14,
+                )
+              : null,
+        ),
       ),
     );
   }
@@ -484,7 +578,8 @@ class _DiscussionPageState extends State<DiscussionPage> {
             isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
         children: [
           if (showAvatar) ...[
-            _buildMessageAvatar(false), // Contact's avatar
+            _buildMessageAvatar(
+                false, _contactUserId ?? message.senderId), // Contact's avatar
             const SizedBox(width: 8),
           ],
 
@@ -561,7 +656,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
 
           if (isMe) ...[
             const SizedBox(width: 8),
-            // Current user's avatar (smaller, optional)
+            // Current user's avatar (smaller, optional) - NOW CLICKABLE
             _buildCurrentUserAvatar(),
           ],
         ],
